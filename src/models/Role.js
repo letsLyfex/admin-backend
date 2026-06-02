@@ -24,7 +24,6 @@ const roleSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
       match: /^[a-z][a-z0-9_]{1,48}$/,
-      index: true,
     },
     permissionKeys: [{ type: String, trim: true }],
     description: { type: String, default: "", maxlength: 500 },

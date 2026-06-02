@@ -2,7 +2,6 @@ const adminAuthService = require("../services/adminAuthService");
 const { requireBodyFields } = require("../validators/common");
 
 exports.login = async (req, res) => {
-  console.log("login is called");
   requireBodyFields(req.body, ["email", "password"]);
   const { getClientIp } = require("../utils/requestHelpers");
   const ip = getClientIp(req);

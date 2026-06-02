@@ -4,7 +4,6 @@ const { verifyAccessFromHeader } = require("../services/adminAuthService");
  * Loads the admin + role from Bearer access token and attaches permission metadata.
  */
 async function attachAdmin(req, res, next) {
-  console.log("attachAdmin is called");
   try {
     const admin = await verifyAccessFromHeader(req.headers.authorization);
     const role = admin.roleId;

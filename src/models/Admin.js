@@ -12,7 +12,6 @@ const adminSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
     passwordHash: { type: String, required: true },
     fullName: { type: String, required: true, trim: true, maxlength: 120 },

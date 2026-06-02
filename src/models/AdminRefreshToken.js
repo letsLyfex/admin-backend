@@ -13,7 +13,7 @@ const adminRefreshTokenSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    tokenHash: { type: String, required: true, unique: true, index: true },
+    tokenHash: { type: String, required: true, unique: true},
     expiresAt: { type: Date, required: true, index: true },
     ipAddress: { type: String, default: "", maxlength: 64 },
     userAgent: { type: String, default: "", maxlength: 512 },
@@ -22,8 +22,10 @@ const adminRefreshTokenSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
-adminRefreshTokenSchema.index({ adminId: 1, expiresAt: 1 });
-
+adminRefreshTokenSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0 }
+);
 adminRefreshTokenSchema.statics.hashToken = hashToken;
 
 module.exports =

@@ -5,29 +5,22 @@ const AdminRefreshToken = require("../models/AdminRefreshToken");
 const { signAdminAccessToken, verifyAdminAccessToken } = require("../config/jwt");
 const { recordActivity } = require("./activityLogService");
 const { hashRefreshToken } = require("../models/AdminRefreshToken");
+const { AppError } = require("../utils/AppError");
+const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function authenticateWithPassword(emailRaw, password, ip, ua) {
-  console.log("authenticate is called");
   const email = String(emailRaw || "").trim().toLowerCase();
   if (!email || !password) {
-    const { AppError } = require("../utils/AppError");
     throw new AppError(400, "Email and password are required");
   }
   const admin = await Admin.findOne({ email }).populate("roleId");
-  console.log("admin", admin);
-  const { AppError } = require("../utils/AppError");
   if (!admin) throw new AppError(401, "Invalid credentials");
-  if (!admin.roleId?.isActive) throw new AppError(403, "Role is inactive");
-  if (admin.isSuspended)
-    throw new AppError(
-      403,
-      admin.suspendedReason?.trim()
-        ? `Suspended: ${admin.suspendedReason.trim()}`
-        : "Account suspended",
-    );
-  const ok = await bcrypt.compare(String(password || ""), admin.passwordHash || "");
-  console.log("ok", ok);
-  if (!ok) throw new AppError(401, "Invalid credentials");
+  const ok = admin
+   ? await bcrypt.compare(String(password||""), admin.passwordHash||"")
+   : false;
+  if (!admin || !ok) throw new AppError(401, "Invalid credentials");
+  if (admin.isSuspended) throw new AppError(403, "Account suspended");
+  if (!admin.roleId?.isActive) throw new AppError(403, "Role inactive");
 
   admin.lastLoginAt = new Date();
   admin.lastLoginIp = String(ip || "").slice(0, 64);
@@ -35,7 +28,7 @@ async function authenticateWithPassword(emailRaw, password, ip, ua) {
 
   const refreshRaw = crypto.randomBytes(48).toString("hex");
   const tokenHash = hashRefreshToken(refreshRaw);
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS);
   await AdminRefreshToken.create({
     adminId: admin._id,
     tokenHash,
@@ -76,7 +69,6 @@ async function authenticateWithPassword(emailRaw, password, ip, ua) {
 }
 
 async function refreshSession(refreshRaw, ip, ua) {
-  const { AppError } = require("../utils/AppError");
   if (!refreshRaw) throw new AppError(400, "refreshToken is required");
   const tokenHash = hashRefreshToken(refreshRaw);
   const doc = await AdminRefreshToken.findOne({ tokenHash, revokedAt: null }).populate({
@@ -95,7 +87,7 @@ async function refreshSession(refreshRaw, ip, ua) {
 
   const nextRaw = crypto.randomBytes(48).toString("hex");
   const nextHash = hashRefreshToken(nextRaw);
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS);
   await AdminRefreshToken.create({
     adminId: admin._id,
     tokenHash: nextHash,
@@ -152,7 +144,6 @@ function parseBearer(header) {
 
 async function verifyAccessFromHeader(header) {
   const token = parseBearer(header);
-  const { AppError } = require("../utils/AppError");
   if (!token) throw new AppError(401, "Unauthorized");
   let decoded;
   try {
@@ -171,7 +162,6 @@ async function verifyAccessFromHeader(header) {
 }
 
 async function updateAdminProfile(adminId, { fullName, currentPassword, newPassword }) {
-  const { AppError } = require("../utils/AppError");
   const admin = await Admin.findById(adminId);
   if (!admin) throw new AppError(404, "Admin not found");
   if (fullName != null) {

@@ -12,7 +12,6 @@ const permissionSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       maxlength: 120,
-      index: true,
     },
     description: { type: String, default: "", maxlength: 500 },
     group: { type: String, default: "general", trim: true, maxlength: 64 },
