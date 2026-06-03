@@ -1,18 +1,19 @@
 const mongoose = require("mongoose");
-const { mainModel } = require("../utils/mainBackendPath");
+const DiscussionRoom = require("../models/DiscussionRoom");
 const { AppError } = require("../utils/AppError");
 const { getPagination, paginationMeta } = require("../utils/pagination");
 const { recordActivity } = require("./activityLogService");
 const DiscussionReport = require("../models/DiscussionReport");
-
+const MeetingMessage = require("../models/MeetingMessage");
+const UserSchedulePin = require("../models/UserSchedulePin");
 function discussionRoomModel() {
-  return mainModel("DiscussionRoom");
+  return DiscussionRoom;
 }
 function meetingMessageModel() {
-  return mainModel("MeetingMessage");
+  return MeetingMessage;
 }
 function userSchedulePinModel() {
-  return mainModel("UserSchedulePin");
+  return UserSchedulePin;
 }
 
 async function tryDeleteLiveKitRoom(roomId) {

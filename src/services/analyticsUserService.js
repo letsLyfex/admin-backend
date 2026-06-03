@@ -1,25 +1,30 @@
-const { mainModel } = require("../utils/mainBackendPath");
-
+const User = require("../models/User");
+const MeetingMessage = require("../models/MeetingMessage");
+const DiscussionRoom = require("../models/DiscussionRoom");
+const LiveSession = require("../models/LiveSession");
+const WatchSession = require("../models/WatchSession");
+const PauseContent = require("../models/PauseContent");
+const UserAnalytics = require("../models/UserAnalytics");
 function userModel() {
-  return mainModel("User");
+  return User;
 }
 function meetingMessageModel() {
-  return mainModel("MeetingMessage");
+  return MeetingMessage;
 }
 function discussionRoomModel() {
-  return mainModel("DiscussionRoom");
+  return DiscussionRoom;
 }
 function liveSessionModel() {
-  return mainModel("LiveSession");
+  return LiveSession;
 }
 function watchSessionModel() {
-  return mainModel("WatchSession");
+  return WatchSession;
 }
 function pauseContentModel() {
-  return mainModel("PauseContent");
+  return PauseContent;
 }
 function userAnalyticsModel() {
-  return mainModel("UserAnalytics");
+  return UserAnalytics;
 }
 
 function startOfUtcDay(d = new Date()) {

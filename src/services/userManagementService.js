@@ -1,12 +1,14 @@
 const mongoose = require("mongoose");
-const { mainModel } = require("../utils/mainBackendPath");
+const User = require("../models/User");
 const { AppError } = require("../utils/AppError");
 const { getPagination, paginationMeta } = require("../utils/pagination");
 const { recordActivity } = require("./activityLogService");
 const DiscussionReport = require("../models/DiscussionReport");
-
+const DiscussionRoom = require("../models/DiscussionRoom");
+const LiveSession = require("../models/LiveSession");
+const WatchSession = require("../models/WatchSession");
 function getUserModel() {
-  return mainModel("User");
+  return User;
 }
 
 async function getUserLeanById(id) {
@@ -119,10 +121,9 @@ async function getUserStats(userId) {
   }
 
   const oid = new mongoose.Types.ObjectId(String(userId));
-  const DiscussionRoom = mainModel("DiscussionRoom");
-  const WatchSession = mainModel("WatchSession");
-  const LiveSession = mainModel("LiveSession");
-
+  const discusssionroomModel = require("../models/DiscussionRoom");
+  const liveSessionModel = require("../models/LiveSession");
+  const watchSessionModel = require("../models/WatchSession");
   const [
     totalSessionsJoined,
     totalRoomsCreated,

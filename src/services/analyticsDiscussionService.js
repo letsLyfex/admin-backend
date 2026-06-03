@@ -1,13 +1,15 @@
-const { mainModel } = require("../utils/mainBackendPath");
-
+const UserAnalytics = require("../models/UserAnalytics");
+const MeetingMessage = require("../models/MeetingMessage");
+const DiscussionRoom = require("../models/DiscussionRoom");
+const SavedDiscussionRecording = require("../models/SavedDiscussionRecording");
 function discussionRoomModel() {
-  return mainModel("DiscussionRoom");
+  return DiscussionRoom;
 }
 function meetingMessageModel() {
-  return mainModel("MeetingMessage");
+  return MeetingMessage;
 }
 function savedDiscussionRecordingModel() {
-  return mainModel("SavedDiscussionRecording");
+  return SavedDiscussionRecording;
 }
 
 /**
