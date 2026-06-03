@@ -12,7 +12,7 @@ const userAnalyticsSchema = new mongoose.Schema(
     streakDays: { type: Number, default: 0 },
     lastStreakDate: { type: String, default: "" },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "useranalytics" }
 );
 
 userAnalyticsSchema.index({ userId: 1, contextType: 1 }, { unique: true });

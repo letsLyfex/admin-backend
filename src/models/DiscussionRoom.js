@@ -100,7 +100,7 @@ const discussionRoomSchema = new mongoose.Schema(
     enableAiAssistant: { type: Boolean, default: false, index: true },
     status: { type: String, default: "scheduled" },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "discussionrooms" }
 );
 
 module.exports = mongoose.model("DiscussionRoom", discussionRoomSchema);

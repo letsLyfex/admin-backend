@@ -87,7 +87,7 @@ const liveSessionSchema = new mongoose.Schema(
       default: "static",
     },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "livesessions" }
 );
 
 module.exports = mongoose.model("LiveSession", liveSessionSchema);

@@ -67,7 +67,7 @@ const watchSessionSchema = new mongoose.Schema(
     },
     status: { type: String, default: "scheduled" },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "watchsessions" }
 );
 
 module.exports = mongoose.model("WatchSession", watchSessionSchema);

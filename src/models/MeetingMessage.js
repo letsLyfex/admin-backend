@@ -13,7 +13,7 @@ const meetingMessageSchema = new mongoose.Schema(
     senderName: { type: String, required: true },
     text: { type: String, required: true, trim: true, maxlength: 1200 },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "meetingmessages" }
 );
 
 meetingMessageSchema.index({ roomId: 1, roomType: 1, createdAt: 1 });

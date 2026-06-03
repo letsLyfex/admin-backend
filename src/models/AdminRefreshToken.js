@@ -22,10 +22,7 @@ const adminRefreshTokenSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
-adminRefreshTokenSchema.index(
-  { expiresAt: 1 },
-  { expireAfterSeconds: 0 }
-);
+
 adminRefreshTokenSchema.statics.hashToken = hashToken;
 
 module.exports =
