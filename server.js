@@ -20,6 +20,7 @@ const discussRoutes = require("./src/routes/discuss.routes");
 const analyticsRoutes = require("./src/routes/analytics.routes");
 const sessionRoutes = require("./src/routes/session.routes");
 const referralRoutes = require("./src/routes/referral.routes");
+const paymentRoutes = require("./src/routes/payment.routes");
 
 const PORT = Number(process.env.ADMIN_PORT) || 4100;
 const MONGODB_URI = String(process.env.MONGODB_URI || "").trim();
@@ -51,6 +52,7 @@ app.use("/discuss", discussRoutes);
 app.use("/analytics", analyticsRoutes);
 app.use("/sessions", sessionRoutes);
 app.use("/referrals", referralRoutes);
+app.use("/payments", paymentRoutes);
 
 app.use(errorHandler);
 
