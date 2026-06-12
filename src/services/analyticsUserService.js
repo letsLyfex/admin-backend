@@ -34,34 +34,8 @@ function startOfUtcDay(d = new Date()) {
 }
 
 async function approxOnlineUsers() {
-  const DiscussionRoom = discussionRoomModel();
-  const LiveSession = liveSessionModel();
-  const WatchSession = watchSessionModel();
-  const PauseContent = pauseContentModel();
-
-  const [dRooms, lSessions, wSessions, pauses] = await Promise.all([
-    DiscussionRoom.find({ isLive: true }).select("participants").lean(),
-    LiveSession.find({ isLive: true }).select("participants").lean(),
-    WatchSession.find({ isLive: true }).select("participants").lean(),
-    PauseContent.find({ isInstantHangout: true, isLive: true })
-      .select("participantIds")
-      .lean(),
-  ]);
-
-  const ids = new Set();
-  for (const r of dRooms) {
-    for (const p of r.participants || []) ids.add(String(p));
-  }
-  for (const r of lSessions) {
-    for (const p of r.participants || []) ids.add(String(p));
-  }
-  for (const r of wSessions) {
-    for (const p of r.participants || []) ids.add(String(p));
-  }
-  for (const r of pauses) {
-    for (const p of r.participantIds || []) ids.add(String(p));
-  }
-  return ids.size;
+  const User = userModel();
+  return await User.countDocuments({ isOnline: true });
 }
 
 /**
