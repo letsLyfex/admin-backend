@@ -12,8 +12,26 @@ async function listPayments(query) {
     $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
   };
 
-  if (query.status) {
-    if (query.status === "paid") filter.hasPaidSubscription = true;
+  if (query.status === "paid") {
+    filter.hasPaidSubscription = true;
+  }
+
+  if (query.status === "created") {
+    filter.hasPaidSubscription = false;
+  }
+
+  if (query.status === "failed") {
+    return {
+      items: [],
+      meta: paginationMeta(0, page, limit),
+    };
+  }
+
+  if (query.status === "refunded") {
+    return {
+      items: [],
+      meta: paginationMeta(0, page, limit),
+    };
   }
 
   if (query.q) {
