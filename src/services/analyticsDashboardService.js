@@ -4,7 +4,6 @@ const LiveSession = require("../models/LiveSession");
 const PauseContent = require("../models/PauseContent");
 const DiscussionRoom = require("../models/DiscussionRoom");
 const ReferralWithdrawal = require("../models/ReferralWithdrawal");
-const Payment = require("../models/Payment");
 const AdminActivityLog = require("../models/AdminActivityLog");
 const { approxOnlineUsers } = require("./analyticsUserService");
 
@@ -18,7 +17,9 @@ async function getDashboardSummary() {
 
   const [
     // Users
-    totalUsers,
+    totalUsers,       // ALL documents — matches MongoDB compass count
+    activeUsers,      // non-deleted only — for context
+    deletedUsers,     // soft-deleted count
     blockedUsers,
     suspendedUsers,
     newUsersLast30,
@@ -39,18 +40,24 @@ async function getDashboardSummary() {
     referralCompleted,
     referralPendingAgg,
 
-    // Payments
+    // Payments — from User model (Payment collection is empty)
     totalPayments,
     paidPayments,
-    revenueAgg,
+    planAgg,
 
     // Activity
     recentActivity,
   ] = await Promise.all([
-    // Users
-    User.countDocuments({
-      $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
-    }),
+
+    // Total 
+    User.countDocuments({}),
+
+    // Active 
+    User.countDocuments({ deletedAt: null }),  
+
+    // Deleted 
+    User.countDocuments({ deletedAt: { $ne: null, $exists: true } }),
+
     User.countDocuments({ isBlocked: true }),
     User.countDocuments({ isSuspended: true }),
     User.countDocuments({ createdAt: { $gte: last30 } }),
@@ -81,17 +88,14 @@ async function getDashboardSummary() {
     ]),
 
     // Payments
-    Payment.countDocuments(),
-    Payment.countDocuments({ status: "paid" }),
-    Payment.aggregate([
-      { $match: { status: "paid" } },
-      {
-        $group: {
-          _id: "$type",
-          totalAmount: { $sum: "$amount" },
-          count: { $sum: 1 },
-        },
-      },
+    User.countDocuments({ hasPaidSubscription: true }),
+    User.countDocuments({
+      hasPaidSubscription: true,
+      subscriptionExpiresAt: { $gt: new Date() },
+    }),
+    User.aggregate([
+      { $match: { hasPaidSubscription: true } },
+      { $group: { _id: "$subscriptionPlan", count: { $sum: 1 } } },
     ]),
 
     // Recent activity — last 10 actions
@@ -105,15 +109,20 @@ async function getDashboardSummary() {
   // Online users across all session types
   const onlineUsers = await approxOnlineUsers();
 
-  // Revenue breakdown
+  const PLAN_PRICE = { TALK: 299, CONTRIBUTE: 599 };
   const revenue = {};
-  revenueAgg.forEach((r) => {
-    revenue[r._id] = { amount: r.totalAmount, count: r.count };
+  planAgg.forEach((p) => {
+    revenue[p._id] = {
+      amount: p.count * (PLAN_PRICE[p._id] ?? 0),
+      count: p.count,
+    };
   });
 
   return {
     users: {
-      total: totalUsers,
+      total: totalUsers,       
+      active: activeUsers,    
+      deleted: deletedUsers,  
       online: onlineUsers,
       blocked: blockedUsers,
       suspended: suspendedUsers,

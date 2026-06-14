@@ -7,33 +7,53 @@ const { recordActivity } = require("./activityLogService");
 
 async function listPayments(query) {
   const { page, limit, skip } = getPagination(query);
-  const filter = {};
+  const filter = {
+    hasPaidSubscription: true,
+    $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+  };
 
-  if (query.status) filter.status = query.status;
-  if (query.type) filter.type = query.type;
-  if (query.plan) filter.plan = query.plan;
-
-  if (query.from || query.to) {
-    filter.createdAt = {};
-    if (query.from) filter.createdAt.$gte = new Date(query.from);
-    if (query.to) filter.createdAt.$lte = new Date(query.to);
+  if (query.status) {
+    if (query.status === "paid") filter.hasPaidSubscription = true;
   }
 
-  if (query.q && mongoose.isValidObjectId(query.q.trim())) {
-    filter.userId = new mongoose.Types.ObjectId(query.q.trim());
+  if (query.q) {
+    const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { fullName: new RegExp(esc, "i") },
+      { email: new RegExp(esc, "i") },
+    ];
   }
 
   const [items, total] = await Promise.all([
-    Payment.find(filter)
-      .populate("userId", "fullName email subscriptionPlan")
-      .sort({ createdAt: -1 })
+    User.find(filter)
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
+      .select("fullName email subscriptionPlan subscriptionExpiresAt hasPaidSubscription usedPaymentIds createdAt updatedAt")
       .lean(),
-    Payment.countDocuments(filter),
+    User.countDocuments(filter),
   ]);
 
-  return { items, meta: paginationMeta(total, page, limit) };
+const mapped = items.map((u) => ({
+  _id: u._id,
+  userId: { _id: u._id, fullName: u.fullName, email: u.email },
+  plan: u.subscriptionPlan,
+  status: u.hasPaidSubscription ? "paid" : "created",
+  amount: u.subscriptionPlan === "TALK" ? 299 : u.subscriptionPlan === "CONTRIBUTE" ? 599 : 0,
+  currency: "INR",
+  // Use the last payment ID from usedPaymentIds array
+  razorpayPaymentId: u.usedPaymentIds?.length > 0 
+    ? u.usedPaymentIds[u.usedPaymentIds.length - 1] 
+    : null,
+  paymentId: u.usedPaymentIds?.length > 0 
+    ? u.usedPaymentIds[u.usedPaymentIds.length - 1] 
+    : null,
+  subscriptionExpiresAt: u.subscriptionExpiresAt,
+  createdAt: u.createdAt,
+  updatedAt: u.updatedAt,
+}));
+
+  return { items: mapped, meta: paginationMeta(total, page, limit) };
 }
 
 async function getPaymentById(id) {
@@ -98,49 +118,20 @@ async function updatePaymentStatus(id, { status, note }, actorId, ip, ua) {
 }
 
 async function getPaymentStats() {
-  const [total, paid, failed, refunded, created] = await Promise.all([
-    Payment.countDocuments(),
-    Payment.countDocuments({ status: "paid" }),
-    Payment.countDocuments({ status: "failed" }),
-    Payment.countDocuments({ status: "refunded" }),
-    Payment.countDocuments({ status: "created" }),
+  const [total, paid, talk, contribute] = await Promise.all([
+    User.countDocuments({ hasPaidSubscription: true }),
+    User.countDocuments({ hasPaidSubscription: true }),
+    User.countDocuments({ subscriptionPlan: "TALK", hasPaidSubscription: true }),
+    User.countDocuments({ subscriptionPlan: "CONTRIBUTE", hasPaidSubscription: true }),
   ]);
-
-  const revenueAgg = await Payment.aggregate([
-    { $match: { status: "paid" } },
-    {
-      $group: {
-        _id: "$type",
-        totalAmount: { $sum: "$amount" },
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-
-  const planAgg = await Payment.aggregate([
-    { $match: { status: "paid", type: "subscription" } },
-    {
-      $group: {
-        _id: "$plan",
-        count: { $sum: 1 },
-        totalAmount: { $sum: "$amount" },
-      },
-    },
-  ]);
-
-  const revenue = {};
-  revenueAgg.forEach((r) => {
-    revenue[r._id] = { amount: r.totalAmount, count: r.count };
-  });
 
   return {
-    count: { total, paid, failed, refunded, created },
-    revenue,
-    byPlan: planAgg.map((p) => ({
-      plan: p._id,
-      count: p.count,
-      totalAmount: p.totalAmount,
-    })),
+    count: { total, paid, failed: 0, refunded: 0, created: 0 },
+    revenue: { INR: (talk * 299) + (contribute * 599) },
+    byPlan: [
+      { plan: "TALK", count: talk, total: talk * 299 },
+      { plan: "CONTRIBUTE", count: contribute, total: contribute * 599 },
+    ],
   };
 }
 

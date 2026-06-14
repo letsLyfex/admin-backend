@@ -5,27 +5,6 @@ const LiveSession = require("../models/LiveSession");
 const WatchSession = require("../models/WatchSession");
 const PauseContent = require("../models/PauseContent");
 const UserAnalytics = require("../models/UserAnalytics");
-function userModel() {
-  return User;
-}
-function meetingMessageModel() {
-  return MeetingMessage;
-}
-function discussionRoomModel() {
-  return DiscussionRoom;
-}
-function liveSessionModel() {
-  return LiveSession;
-}
-function watchSessionModel() {
-  return WatchSession;
-}
-function pauseContentModel() {
-  return PauseContent;
-}
-function userAnalyticsModel() {
-  return UserAnalytics;
-}
 
 function startOfUtcDay(d = new Date()) {
   const x = new Date(d);
@@ -34,20 +13,115 @@ function startOfUtcDay(d = new Date()) {
 }
 
 async function approxOnlineUsers() {
-  const User = userModel();
-  return await User.countDocuments({ isOnline: true });
+  return User.countDocuments({ isOnline: true });
 }
 
-/**
- * Dashboard metrics. Several values are Mongo-derived approximations (documented inline).
- */
-async function getUserAnalyticsSummary() {
-  const User = userModel();
-  const MeetingMessage = meetingMessageModel();
-  const UserAnalytics = userAnalyticsModel();
+async function countActiveUsers(since) {
+  return User.countDocuments({
+    updatedAt: { $gte: since },
+    $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+  });
+}
 
+
+async function countReturningUsers(since) {
+  const dayFmt = (dateField) => ({
+    $dateToString: { format: "%Y-%m-%d", date: dateField },
+  });
+
+  const sessionFilter = { updatedAt: { $gte: since } };
+  const msgFilter = { createdAt: { $gte: since } };
+
+  const [liveDays, watchDays, pauseDays, discussDays, msgDays] = await Promise.all([
+    LiveSession.aggregate([
+      { $match: sessionFilter },
+      { $unwind: "$participants" },
+      { $group: { _id: { u: "$participants", day: dayFmt("$updatedAt") } } },
+    ]),
+    WatchSession.aggregate([
+      { $match: sessionFilter },
+      { $unwind: "$participants" },
+      { $group: { _id: { u: "$participants", day: dayFmt("$updatedAt") } } },
+    ]),
+    PauseContent.aggregate([
+      { $match: sessionFilter },
+      { $unwind: "$participantIds" },
+      { $group: { _id: { u: "$participantIds", day: dayFmt("$updatedAt") } } },
+    ]),
+    DiscussionRoom.aggregate([
+      { $match: sessionFilter },
+      { $unwind: "$participants" },
+      { $group: { _id: { u: "$participants", day: dayFmt("$updatedAt") } } },
+    ]),
+    MeetingMessage.aggregate([
+      { $match: msgFilter },
+      { $group: { _id: { u: "$senderId", day: dayFmt("$createdAt") } } },
+    ]),
+  ]);
+
+  // Union all (userId, day) pairs into a map → Set<day>
+  const userDays = new Map();
+  for (const agg of [liveDays, watchDays, pauseDays, discussDays, msgDays]) {
+    for (const { _id } of agg) {
+      if (!_id?.u) continue;
+      const uid = String(_id.u);
+      if (!userDays.has(uid)) userDays.set(uid, new Set());
+      userDays.get(uid).add(_id.day);
+    }
+  }
+
+  let returning = 0;
+  for (const days of userDays.values()) {
+    if (days.size >= 2) returning++;
+  }
+  return returning;
+}
+
+//  Avg session duration 
+
+async function getAvgSessionDurationMs(mauStart) {
+  // Try UserAnalytics client payloads (most accurate, but sparse)
+  const analyticsSample = await UserAnalytics.find({ updatedAt: { $gte: mauStart } })
+    .select("analyticsJson")
+    .limit(2000)
+    .lean();
+
+  const samples = [];
+  for (const row of analyticsSample) {
+    try {
+      const j = JSON.parse(String(row.analyticsJson || "{}"));
+      const v = Number(j.avgSessionDurationMs);
+      if (Number.isFinite(v) && v > 0) samples.push(v);
+    } catch { /* ignore */ }
+  }
+  if (samples.length > 0) {
+    return samples.reduce((a, b) => a + b, 0) / samples.length;
+  }
+
+  // 2. Fallback: avg LiveSession.duration (minutes) for ended sessions
+  const durationAgg = await LiveSession.aggregate([
+    {
+      $match: {
+        status: "ended",
+        duration: { $gt: 0 },
+        updatedAt: { $gte: mauStart },
+      },
+    },
+    { $group: { _id: null, avg: { $avg: "$duration" } } },
+  ]);
+  if (durationAgg[0]?.avg) {
+    return durationAgg[0].avg * 60_000; 
+  }
+
+  return 0;
+}
+
+//  Main export
+
+async function getUserAnalyticsSummary() {
   const now = new Date();
-  const sod = startOfUtcDay(now);
+  const sod = startOfUtcDay(now);          // today 00:00 UTC
+
   const mauStart = new Date(now);
   mauStart.setUTCDate(mauStart.getUTCDate() - 30);
 
@@ -55,94 +129,47 @@ async function getUserAnalyticsSummary() {
     totalUsers,
     blockedUsers,
     suspendedUsers,
-    dauAgg,
-    mauAgg,
-    recentMsgAgg,
-    analyticsActive,
-    analyticsSample,
-  ] = await Promise.all([
-    User.countDocuments({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }),
-    User.countDocuments({ isBlocked: true, deletedAt: null }),
-    User.countDocuments({ isSuspended: true, deletedAt: null }),
-    MeetingMessage.aggregate([
-      { $match: { createdAt: { $gte: sod } } },
-      { $group: { _id: "$senderId" } },
-      { $count: "c" },
-    ]),
-    MeetingMessage.aggregate([
-      { $match: { createdAt: { $gte: mauStart } } },
-      { $group: { _id: "$senderId" } },
-      { $count: "c" },
-    ]),
-    MeetingMessage.aggregate([
-      { $match: { createdAt: { $gte: mauStart } } },
-      {
-        $group: {
-          _id: { u: "$senderId", day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } } },
-        },
-      },
-      { $group: { _id: "$_id.u", days: { $sum: 1 } } },
-      { $match: { days: { $gte: 2 } } },
-      { $count: "c" },
-    ]),
-    UserAnalytics.countDocuments({ updatedAt: { $gte: mauStart } }),
-    UserAnalytics.find({ updatedAt: { $gte: mauStart } })
-      .select("analyticsJson")
-      .limit(2000)
-      .lean(),
-  ]);
-
-  const dau = dauAgg[0]?.c || 0;
-  const mau = mauAgg[0]?.c || 0;
-  const returningUsers = recentMsgAgg[0]?.c || 0;
-
-  const onlineUsers = await approxOnlineUsers();
-
-  let avgSessionDurationMs = null;
-  const samples = [];
-  for (const row of analyticsSample || []) {
-    try {
-      const j = JSON.parse(String(row.analyticsJson || "{}"));
-      const v = Number(j.avgSessionDurationMs);
-      if (Number.isFinite(v) && v > 0) samples.push(v);
-    } catch {
-      /* ignore malformed client payloads */
-    }
-  }
-  if (samples.length) {
-    avgSessionDurationMs = samples.reduce((a, b) => a + b, 0) / samples.length;
-  }
-  if (avgSessionDurationMs == null) {
-    // Fallback proxy: messages per active user over MAU window (not true duration)
-    const [msgCount, distinctSenders] = await Promise.all([
-      MeetingMessage.countDocuments({ createdAt: { $gte: mauStart } }),
-      MeetingMessage.distinct("senderId", { createdAt: { $gte: mauStart } }),
-    ]);
-    avgSessionDurationMs =
-      distinctSenders.length > 0 ? (msgCount / distinctSenders.length) * 60_000 : 0;
-  }
-
-  const retentionRate =
-    totalUsers > 0 ? Math.min(1, Math.max(0, (returningUsers / totalUsers) * (mau / Math.max(totalUsers, 1)))) : 0;
-
-  return {
-    totalUsers,
-    onlineUsersNote:
-      "Distinct user ids currently listed on in-memory Mongo participant rosters for live discussion / learn / watch / pause hangouts (same source the main app updates on socket join).",
-    onlineUsers,
-    blockedUsers,
-    suspendedUsers,
     dau,
     mau,
     returningUsers,
+    avgSessionDurationMs,
+    onlineUsers,
+  ] = await Promise.all([
+    User.countDocuments({
+      $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+    }),
+    User.countDocuments({ isBlocked: true }),
+    User.countDocuments({ isSuspended: true }),
+    countActiveUsers(sod),          
+    countActiveUsers(mauStart),     
+    countReturningUsers(mauStart),
+    getAvgSessionDurationMs(mauStart),
+    approxOnlineUsers(),
+  ]);
+
+  
+  const retentionRate = mau > 0 ? Math.min(1, dau / mau) : 0;
+
+  return {
+    totalUsers,
+    onlineUsers,
+    onlineUsersNote: "Users with isOnline: true (set by socket layer).",
+    blockedUsers,
+    suspendedUsers,
+    dau,
+    dauNote: "Users whose User document was updated today (login, join/leave session, disconnect). Same signal that drives isOnline.",
+    mau,
+    mauNote: "Users whose User document was updated in the last 30 days.",
+    returningUsers,
     returningUsersNote:
-      "Users with chat activity on 2+ distinct days in the last 30 days (MeetingMessage)",
-    avgSessionDurationMs: Math.round(Number(avgSessionDurationMs) || 0),
+      "Users with chat or session-participant activity on 2+ distinct days in 30d. Undercounts silent watchers — DAU/MAU is the better engagement signal.",
+    avgSessionDurationMs: Math.round(avgSessionDurationMs),
     avgSessionDurationNote:
-      "Uses UserAnalytics.analyticsJson.avgSessionDurationMs when present; otherwise a chat-activity proxy (not true client session time).",
+      "UserAnalytics.analyticsJson when available; falls back to avg LiveSession.duration for ended sessions.",
     retentionRate: Math.round(retentionRate * 10000) / 10000,
-    retentionRateNote: "Heuristic: (returningUsers / totalUsers) * (mau / totalUsers), capped at 1 — refine with event tracking later.",
-    userAnalyticsRowsTouched30d: analyticsActive,
+    retentionRateNote:
+      "DAU / MAU sticky factor. Meaningful once real traffic exists. 0.1 = 10% of monthly users were active today.",
+    userAnalyticsRowsTouched30d: 0, 
   };
 }
 
