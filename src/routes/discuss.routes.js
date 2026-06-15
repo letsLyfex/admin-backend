@@ -8,33 +8,33 @@ const router = express.Router();
 
 router.use(attachAdmin);
 
-router.get("/rooms", requirePermission("discussions.read"), asyncHandler(d.listRooms));
+router.get("/rooms", requirePermission("sessions.view"), asyncHandler(d.listRooms));
 
-router.get("/reports", requirePermission("discussions.moderate"), asyncHandler(d.listReports));
+router.get("/reports", requirePermission("sessions.moderate"), asyncHandler(d.listReports));
 
 router.patch(
   "/reports/:reportId",
-  requirePermission("discussions.moderate"),
+  requirePermission("sessions.moderate"),
   asyncHandler(d.patchReport),
 );
 
-router.get("/room/:id", requirePermission("discussions.read"), asyncHandler(d.getRoom));
+router.get("/room/:id", requirePermission("sessions.view"), asyncHandler(d.getRoom));
 
 router.delete(
   "/room/:id",
-  requirePermission("discussions.delete"),
+  requirePermission("sessions.delete"),
   asyncHandler(d.deleteRoom),
 );
 
 router.patch(
   "/pin/:id",
-  requirePermission("discussions.pin"),
+  requirePermission("sessions.pin"),
   asyncHandler(d.pin),
 );
 
 router.patch(
   "/feature/:id",
-  requirePermission("discussions.pin"),
+  requirePermission("sessions.feature"),
   asyncHandler(d.feature),
 );
 

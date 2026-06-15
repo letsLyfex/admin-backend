@@ -8,8 +8,8 @@ const router = express.Router();
 
 router.use(attachAdmin);
 
-router.get("/", requirePermission("roles.read"), asyncHandler(role.listRoles));
-router.get("/permissions/catalog", requirePermission("roles.read"), asyncHandler(role.listPermissions));
+router.get("/", requirePermission("roles.view"), asyncHandler(role.listRoles));
+router.get("/permissions/catalog", requirePermission("roles.view"), asyncHandler(role.listPermissions));
 
 router.post("/create", requirePermission("roles.manage"), asyncHandler(role.createRole));
 router.patch("/:id", requirePermission("roles.manage"), asyncHandler(role.updateRole));

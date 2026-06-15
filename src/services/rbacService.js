@@ -5,14 +5,40 @@ const { recordActivity } = require("./activityLogService");
 const { AppError } = require("../utils/AppError");
 const { ALL_KEYS } = require("./bootstrapService");
 
+function permissionsToKeys(permissions = {}) {
+  const keys = [];
+  for (const [screen, actions] of Object.entries(permissions)) {
+    for (const [action, enabled] of Object.entries(actions)) {
+      if (enabled === true) {
+        keys.push(`${screen}.${action}`); // e.g. "payments.view", "payments.edit"
+      }
+    }
+  }
+  return keys;
+}
+
+function keysToPermissions(permissionKeys = []) {
+  const permissions = {};
+  for (const key of permissionKeys) {
+    const [screen, action] = key.split(".");
+    if (!screen || !action) continue;
+    if (!permissions[screen]) permissions[screen] = {};
+    permissions[screen][action] = true;
+  }
+  return permissions;
+}
+
 async function listPermissions() {
   return Permission.find().sort({ group: 1, key: 1 }).lean();
 }
 
 async function listRoles() {
-  return Role.find().sort({ isSystem: -1, name: 1 }).lean();
+  const roles = await Role.find().sort({ isSystem: -1, name: 1 }).lean();
+  return roles.map((r) => ({
+    ...r,
+    permissions: keysToPermissions(r.permissionKeys ?? []),
+  }));
 }
-
 function validateSlug(slug) {
   const s = String(slug || "").trim().toLowerCase();
   if (!/^[a-z][a-z0-9_]{1,48}$/.test(s)) {

@@ -10,37 +10,37 @@ router.use(attachAdmin);
 
 router.get(
   "/dashboard",
-  requirePermission("analytics.read"),
+  requirePermission("dashboard.view"),
   asyncHandler(a.dashboard)
 );
 
 router.get(
   "/users",
-  requirePermission("analytics.users"),
+  requirePermission("analytics.view"),
   asyncHandler(a.users),
 );
 
 router.get(
   "/discussions",
-  requirePermission("analytics.discussions"),
+  requirePermission("analytics.view"),
   asyncHandler(a.discussions),
 );
 
 router.get(
   "/watch",
-  requirePermission("analytics.read"),
+  requirePermission("analytics.view"),
   asyncHandler(a.watchSessions)
 );
 
 router.get(
   "/live",
-  requirePermission("analytics.read"),
+  requirePermission("analytics.view"),
   asyncHandler(a.liveSessions)
 );
 
 router.get(
   "/pause",
-  requirePermission("analytics.read"),
+  requirePermission("analytics.view"),
   asyncHandler(a.pauseSessions)
 );
 module.exports = router;

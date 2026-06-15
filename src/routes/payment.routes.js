@@ -9,31 +9,31 @@ router.use(attachAdmin);
 
 router.get(
   "/",
-  requirePermission("payments.read"),
+  requirePermission("payments.view"),
   asyncHandler(c.listPayments)
 );
 
 router.get(
   "/stats",
-  requirePermission("payments.read"),
+  requirePermission("payments.view"),
   asyncHandler(c.getStats)
 );
 
 router.get(
   "/user/:userId",
-  requirePermission("payments.read"),
+  requirePermission("payments.view"),
   asyncHandler(c.getUserPayments)
 );
 
 router.get(
   "/:id",
-  requirePermission("payments.read"),
+  requirePermission("payments.view"),
   asyncHandler(c.getPayment)
 );
 
 router.patch(
   "/:id/status",
-  requirePermission("payments.manage"),
+  requirePermission("payments.edit"),
   asyncHandler(c.updateStatus)
 );
 

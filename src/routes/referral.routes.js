@@ -9,31 +9,31 @@ router.use(attachAdmin);
 
 router.get(
   "/",
-  requirePermission("referrals.read"),
+  requirePermission("referrals.view"),
   asyncHandler(c.listWithdrawals)
 );
 
 router.get(
   "/stats",
-  requirePermission("referrals.read"),
+  requirePermission("referrals.view"),
   asyncHandler(c.getStats)
 );
 
 router.get(
   "/user/:userId",
-  requirePermission("referrals.read"),
+  requirePermission("referrals.view"),
   asyncHandler(c.getUserSummary)
 );
 
 router.get(
   "/:id",
-  requirePermission("referrals.read"),
+  requirePermission("referrals.view"),
   asyncHandler(c.getWithdrawal)
 );
 
 router.patch(
   "/:id/status",
-  requirePermission("referrals.manage"),
+  requirePermission("referrals.edit"),
   asyncHandler(c.updateStatus)
 );
 

@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.use(attachAdmin);
 
-router.get("/", requirePermission("users.read"), asyncHandler(u.list));
+router.get("/", requirePermission("users.view"), asyncHandler(u.list));
 
 router.patch(
   "/block/:id",
@@ -28,7 +28,7 @@ router.patch(
   asyncHandler(u.assignBadge),
 );
 
-router.patch("/reset/:id", requirePermission("users.write"), asyncHandler(u.resetAccount));
+router.patch("/reset/:id", requirePermission("users.edit"), asyncHandler(u.resetAccount));
 
 router.delete("/:id", requirePermission("users.delete"), asyncHandler(u.remove));
 
@@ -38,6 +38,6 @@ router.patch(
   asyncHandler(u.verifyContributor),
 );
 
-router.get("/:id", requirePermission("users.read"), asyncHandler(u.getOne));
+router.get("/:id", requirePermission("users.view"), asyncHandler(u.getOne));
 
 module.exports = router;

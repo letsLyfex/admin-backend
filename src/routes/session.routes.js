@@ -10,22 +10,22 @@ router.use(attachAdmin);
 //  WATCH ROUTES 
 router.get(
   "/watch",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.listWatchSessions)
 );
 router.get(
   "/watch/stats",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.watchStats)
 );
 router.get(
   "/watch/:id",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.getWatchSession)
 );
 router.patch(
   "/watch/:id",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.updateWatchSession)
 );
 router.delete(
@@ -35,34 +35,34 @@ router.delete(
 );
 router.post(
   "/watch/:id/ban/:userId",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.banFromWatch)
 );
 router.delete(
   "/watch/:id/ban/:userId",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.unbanFromWatch)
 );
 
 //  LIVE ROUTES 
 router.get(
   "/live",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.listLiveSessions)
 );
 router.get(
   "/live/stats",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.liveStats)
 );
 router.get(
   "/live/:id",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.getLiveSession)
 );
 router.patch(
   "/live/:id",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.updateLiveSession)
 );
 router.delete(
@@ -72,34 +72,34 @@ router.delete(
 );
 router.post(
   "/live/:id/ban/:userId",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.banFromLive)
 );
 router.delete(
   "/live/:id/ban/:userId",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.unbanFromLive)
 );
 
 //  PAUSE ROUTES 
 router.get(
   "/pause",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.listPauseSessions)
 );
 router.get(
   "/pause/stats",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.pauseStats)
 );
 router.get(
   "/pause/:id",
-  requirePermission("sessions.read"),
+  requirePermission("sessions.view"),
   asyncHandler(c.getPauseSession)
 );
 router.patch(
   "/pause/:id",
-  requirePermission("sessions.manage"),
+  requirePermission("sessions.edit"),
   asyncHandler(c.updatePauseSession)
 );
 router.delete(
