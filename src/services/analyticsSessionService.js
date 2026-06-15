@@ -1,19 +1,12 @@
 const WatchSession = require("../models/WatchSession");
 const LiveSession = require("../models/LiveSession");
 const PauseContent = require("../models/PauseContent");
-const MeetingMessage = require("../models/MeetingMessage");
-const SavedDiscussionRecording = require("../models/SavedDiscussionRecording");
-
-function watchSessionModel() { return WatchSession; }
-function liveSessionModel() { return LiveSession; }
-function pauseContentModel() { return PauseContent; }
-function meetingMessageModel() { return MeetingMessage; }
-function savedDiscussionRecordingModel() { return SavedDiscussionRecording; }
 
 //  WATCH SESSION ANALYTICS 
 
 async function getWatchSessionAnalytics() {
-  const WatchSession = watchSessionModel();
+  const now = new Date();
+  const thirty = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     totalSessions,
@@ -21,18 +14,23 @@ async function getWatchSessionAnalytics() {
     endedSessions,
     scheduledSessions,
     automatedSessions,
-    recordedSessions,
     paidSessions,
     categoryAgg,
     sourceAgg,
     recentSessions,
+    participantAgg,
   ] = await Promise.all([
     WatchSession.countDocuments(),
-    WatchSession.countDocuments({ isLive: true }),
+
+WatchSession.countDocuments({
+  startsAt: { $lte: now },
+  endTime: { $exists: false },   
+  status: { $nin: ["ended", "cancelled"] },
+}),
+
     WatchSession.countDocuments({ status: "ended" }),
     WatchSession.countDocuments({ status: "scheduled" }),
     WatchSession.countDocuments({ isAutomated: true }),
-    WatchSession.countDocuments({ recordingStatus: "completed" }),
     WatchSession.countDocuments({ visibility: "pay_to_watch" }),
 
     // sessions per category
@@ -48,47 +46,60 @@ async function getWatchSessionAnalytics() {
       { $sort: { count: -1 } },
     ]),
 
-    // last 30 days trend
     WatchSession.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      },
+      { $match: { createdAt: { $gte: thirty } } },
       {
         $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
-          },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           count: { $sum: 1 },
         },
       },
       { $sort: { _id: 1 } },
     ]),
+
+    
+    WatchSession.aggregate([
+      {
+        $project: {
+          duration: 1,
+          participantCount: {
+            $max: [
+              { $size: { $ifNull: ["$participants", []] } },
+              {
+                $add: [
+                  { $size: { $ifNull: ["$paidParticipantIds", []] } },
+                  { $size: { $ifNull: ["$vipParticipantIds", []] } },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalParticipants: { $sum: "$participantCount" },
+          peakParticipants: { $max: "$participantCount" },
+          avgDuration: {
+            $avg: {
+              $cond: [{ $gt: ["$duration", 0] }, "$duration", null],
+            },
+          },
+        },
+      },
+    ]),
+
   ]);
 
-  // total participants across all sessions
-  const sessions = await WatchSession.find({})
-    .select("participants duration")
-    .lean();
+  // Recorded: check both recordingStatus AND recordingUrl existing
+  const recordedSessions = await WatchSession.countDocuments({
+    $or: [
+      { recordingStatus: "completed" },
+      { recordingUrl: { $exists: true, $ne: null, $ne: "" } },
+    ],
+  });
 
-  const totalParticipants = sessions.reduce(
-    (sum, s) => sum + (s.participants?.length || 0),
-    0
-  );
-  const peakParticipants = sessions.reduce(
-    (max, s) => Math.max(max, s.participants?.length || 0),
-    0
-  );
-
-  const durations = sessions
-    .map((s) => Number(s.duration))
-    .filter((d) => d > 0);
-  const avgDurationMinutes = durations.length
-    ? durations.reduce((a, b) => a + b, 0) / durations.length
-    : 0;
+  const agg = participantAgg[0] ?? {};
 
   return {
     totalSessions,
@@ -98,25 +109,28 @@ async function getWatchSessionAnalytics() {
     automatedSessions,
     recordedSessions,
     paidSessions,
-    totalParticipants,
-    totalParticipantsNote:
-      "Sum of participant array lengths per WatchSession document.",
-    peakParticipants,
-    peakParticipantsNote:
-      "Maximum participants roster size on any single WatchSession row.",
-    avgDurationMinutes: Math.round(avgDurationMinutes * 100) / 100,
-    avgDurationNote:
-      "Average of scheduled duration field (minutes), not tracked LiveKit session length.",
-    byCategory: categoryAgg.map((a) => ({ category: a._id || "uncategorized", count: a.count })),
-    bySource: sourceAgg.map((a) => ({ source: a._id || "static", count: a.count })),
-    last30DaysTrend: recentSessions.map((a) => ({ date: a._id, count: a.count })),
+    totalParticipants: agg.totalParticipants ?? 0,
+    peakParticipants: agg.peakParticipants ?? 0,
+    avgDurationMinutes: Math.round((agg.avgDuration ?? 0) * 100) / 100,
+    byCategory: categoryAgg.map((a) => ({
+      category: a._id || "uncategorized",
+      count: a.count,
+    })),
+    bySource: sourceAgg.map((a) => ({
+      source: a._id || "static",
+      count: a.count,
+    })),
+    last30DaysTrend: recentSessions.map((a) => ({
+      date: a._id,
+      count: a.count,
+    })),
   };
 }
 
 //  LIVE SESSION ANALYTICS (LEARN) 
 
 async function getLiveSessionAnalytics() {
-  const LiveSession = liveSessionModel();
+  const thirty = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     totalSessions,
@@ -126,20 +140,25 @@ async function getLiveSessionAnalytics() {
     learnType,
     watchType,
     automatedSessions,
-    recordedSessions,
     paidSessions,
     visibilityAgg,
     sourceAgg,
     recentSessions,
+    participantAgg,
   ] = await Promise.all([
     LiveSession.countDocuments(),
-    LiveSession.countDocuments({ isLive: true }),
+
+LiveSession.countDocuments({
+  firstJoinAt: { $exists: true },
+  endTime: { $exists: false },
+  status: { $nin: ["ended", "cancelled"] },
+}),
+
     LiveSession.countDocuments({ status: "ended" }),
     LiveSession.countDocuments({ status: "scheduled" }),
     LiveSession.countDocuments({ sessionType: "learn" }),
     LiveSession.countDocuments({ sessionType: "watch" }),
     LiveSession.countDocuments({ isAutomated: true }),
-    LiveSession.countDocuments({ recordingStatus: "completed" }),
     LiveSession.countDocuments({ visibility: "pay_to_watch" }),
 
     // by visibility
@@ -154,46 +173,58 @@ async function getLiveSessionAnalytics() {
       { $sort: { count: -1 } },
     ]),
 
-    // last 30 days trend
     LiveSession.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      },
+      { $match: { createdAt: { $gte: thirty } } },
       {
         $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
-          },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           count: { $sum: 1 },
         },
       },
       { $sort: { _id: 1 } },
     ]),
+
+    LiveSession.aggregate([
+      {
+        $project: {
+          duration: 1,
+          participantCount: {
+            $max: [
+              { $size: { $ifNull: ["$participants", []] } },
+              {
+                $add: [
+                  { $size: { $ifNull: ["$paidParticipantIds", []] } },
+                  { $size: { $ifNull: ["$vipParticipantIds", []] } },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalParticipants: { $sum: "$participantCount" },
+          peakParticipants: { $max: "$participantCount" },
+          avgDuration: {
+            $avg: {
+              $cond: [{ $gt: ["$duration", 0] }, "$duration", null],
+            },
+          },
+        },
+      },
+    ]),
   ]);
 
-  const sessions = await LiveSession.find({})
-    .select("participants duration")
-    .lean();
+  // Recorded: check both fields
+  const recordedSessions = await LiveSession.countDocuments({
+    $or: [
+      { recordingStatus: "completed" },
+      { recordingUrl: { $exists: true, $ne: null, $ne: "" } },
+    ],
+  });
 
-  const totalParticipants = sessions.reduce(
-    (sum, s) => sum + (s.participants?.length || 0),
-    0
-  );
-  const peakParticipants = sessions.reduce(
-    (max, s) => Math.max(max, s.participants?.length || 0),
-    0
-  );
-
-  const durations = sessions
-    .map((s) => Number(s.duration))
-    .filter((d) => d > 0);
-  const avgDurationMinutes = durations.length
-    ? durations.reduce((a, b) => a + b, 0) / durations.length
-    : 0;
+  const agg = participantAgg[0] ?? {};
 
   return {
     totalSessions,
@@ -204,23 +235,28 @@ async function getLiveSessionAnalytics() {
     automatedSessions,
     recordedSessions,
     paidSessions,
-    totalParticipants,
-    totalParticipantsNote:
-      "Sum of participant array lengths per LiveSession document.",
-    peakParticipants,
-    avgDurationMinutes: Math.round(avgDurationMinutes * 100) / 100,
-    avgDurationNote:
-      "Average of scheduled duration field (minutes), not tracked LiveKit session length.",
-    byVisibility: visibilityAgg.map((a) => ({ visibility: a._id || "public", count: a.count })),
-    bySource: sourceAgg.map((a) => ({ source: a._id || "static", count: a.count })),
-    last30DaysTrend: recentSessions.map((a) => ({ date: a._id, count: a.count })),
+    totalParticipants: agg.totalParticipants ?? 0,
+    peakParticipants: agg.peakParticipants ?? 0,
+    avgDurationMinutes: Math.round((agg.avgDuration ?? 0) * 100) / 100,
+    byVisibility: visibilityAgg.map((a) => ({
+      visibility: a._id || "public",
+      count: a.count,
+    })),
+    bySource: sourceAgg.map((a) => ({
+      source: a._id || "static",
+      count: a.count,
+    })),
+    last30DaysTrend: recentSessions.map((a) => ({
+      date: a._id,
+      count: a.count,
+    })),
   };
 }
 
 //  PAUSE SESSION ANALYTICS 
 
 async function getPauseSessionAnalytics() {
-  const PauseContent = pauseContentModel();
+  const thirty = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     totalSessions,
@@ -229,77 +265,94 @@ async function getPauseSessionAnalytics() {
     recordedSessions,
     vibeTagAgg,
     recentSessions,
+    participantAgg,
   ] = await Promise.all([
     PauseContent.countDocuments(),
-    PauseContent.countDocuments({ isLive: true }),
-    PauseContent.countDocuments({ isInstantHangout: true }),
-    PauseContent.countDocuments({ recordingStatus: "completed" }),
 
-    // by vibe tag
+    PauseContent.countDocuments({
+      $or: [{ isLive: true }, { status: "live" }],
+    }),
+
+    PauseContent.countDocuments({ isInstantHangout: true }),
+
+    PauseContent.countDocuments({
+      $or: [
+        { recordingStatus: "completed" },
+        { recordingUrl: { $exists: true, $ne: null, $ne: "" } },
+      ],
+    }),
+
     PauseContent.aggregate([
       { $group: { _id: "$vibeTag", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]),
 
-    // last 30 days trend
     PauseContent.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      },
+      { $match: { createdAt: { $gte: thirty } } },
       {
         $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
-          },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           count: { $sum: 1 },
         },
       },
       { $sort: { _id: 1 } },
     ]),
+
+    // Pause uses participantIds, not participants
+    PauseContent.aggregate([
+      {
+        $project: {
+          duration: 1,
+          views: 1,
+          participantCount: {
+            $max: [
+              { $size: { $ifNull: ["$participantIds", []] } },
+              {
+                $add: [
+                  { $size: { $ifNull: ["$paidParticipantIds", []] } },
+                  { $size: { $ifNull: ["$vipParticipantIds", []] } },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalParticipants: { $sum: "$participantCount" },
+          peakParticipants: { $max: "$participantCount" },
+          totalViews: { $sum: { $ifNull: ["$views", 0] } },
+          avgDuration: {
+            $avg: {
+              $cond: [{ $gt: ["$duration", 0] }, "$duration", null],
+            },
+          },
+        },
+      },
+    ]),
   ]);
 
-  const sessions = await PauseContent.find({})
-    .select("participantIds duration views")
-    .lean();
-
-  const totalParticipants = sessions.reduce(
-    (sum, s) => sum + (s.participantIds?.length || 0),
-    0
-  );
-  const peakParticipants = sessions.reduce(
-    (max, s) => Math.max(max, s.participantIds?.length || 0),
-    0
-  );
-  const totalViews = sessions.reduce(
-    (sum, s) => sum + (Number(s.views) || 0),
-    0
-  );
-
-  const durations = sessions
-    .map((s) => Number(s.duration))
-    .filter((d) => d > 0);
-  const avgDurationMinutes = durations.length
-    ? durations.reduce((a, b) => a + b, 0) / durations.length
-    : 0;
+  const agg = participantAgg[0] ?? {};
 
   return {
     totalSessions,
     liveSessions,
     instantHangouts,
     recordedSessions,
-    totalParticipants,
-    totalParticipantsNote:
-      "Sum of participantIds array lengths per PauseContent document.",
-    peakParticipants,
-    totalViews,
-    avgDurationMinutes: Math.round(avgDurationMinutes * 100) / 100,
-    byVibeTag: vibeTagAgg.map((a) => ({ vibeTag: a._id || "none", count: a.count })),
-    last30DaysTrend: recentSessions.map((a) => ({ date: a._id, count: a.count })),
+    totalParticipants: agg.totalParticipants ?? 0,
+    peakParticipants: agg.peakParticipants ?? 0,
+    totalViews: agg.totalViews ?? 0,
+    avgDurationMinutes: Math.round((agg.avgDuration ?? 0) * 100) / 100,
+    byVibeTag: vibeTagAgg.map((a) => ({
+      vibeTag: a._id || "none",
+      count: a.count,
+    })),
+    last30DaysTrend: recentSessions.map((a) => ({
+      date: a._id,
+      count: a.count,
+    })),
   };
 }
 

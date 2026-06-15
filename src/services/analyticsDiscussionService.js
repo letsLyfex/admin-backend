@@ -2,76 +2,83 @@ const UserAnalytics = require("../models/UserAnalytics");
 const MeetingMessage = require("../models/MeetingMessage");
 const DiscussionRoom = require("../models/DiscussionRoom");
 const SavedDiscussionRecording = require("../models/SavedDiscussionRecording");
-function discussionRoomModel() {
-  return DiscussionRoom;
-}
-function meetingMessageModel() {
-  return MeetingMessage;
-}
-function savedDiscussionRecordingModel() {
-  return SavedDiscussionRecording;
-}
+const DiscussionReport = require("../models/DiscussionReport"); // ADD THIS
 
-/**
- * Aggregated discussion metrics (some fields are proxies where product telemetry is not persisted).
- */
 async function getDiscussionAnalyticsSummary() {
-  const DiscussionRoom = discussionRoomModel();
-  const MeetingMessage = meetingMessageModel();
-  const SavedDiscussionRecording = savedDiscussionRecordingModel();
+  const now = new Date();
 
-  const rooms = await DiscussionRoom.find({})
-    .select("participants duration endTime startsAt topic isLive")
-    .lean();
+  const [rooms, messageCount, recordingsCount, totalReports, pendingReports, resolvedReports] =
+    await Promise.all([
+      DiscussionRoom.find({})
+        .select("participants duration endTime startsAt topic isLive")
+        .lean(),
+      MeetingMessage.countDocuments({ roomType: "discussion" }),
+      SavedDiscussionRecording.countDocuments({}),
+      DiscussionReport.countDocuments({}),
+      DiscussionReport.countDocuments({ status: "pending" }),
+      DiscussionReport.countDocuments({ status: "resolved" }),
+    ]);
 
   const totalRooms = rooms.length;
-  const participantSets = rooms.map((r) => new Set((r.participants || []).map((x) => String(x))));
-  const totalParticipants = participantSets.reduce((s, set) => s + set.size, 0);
 
+  const liveNow   = rooms.filter(r =>  r.isLive === true || r.status === "live").length;
+  const ended     = rooms.filter(r => r.status === "ended" || (r.endTime != null && new Date(r.endTime) <= now && !r.isLive)).length;
+  const scheduled = totalRooms - liveNow - ended;
+
+  const byStatus = [
+    { label: "Live",      value: liveNow },
+    { label: "Ended",     value: ended },
+    { label: "Scheduled", value: scheduled },
+  ];
+
+  const participantSets = rooms.map(r => new Set((r.participants || []).map(x => String(x))));
+  const totalParticipants = participantSets.reduce((s, set) => s + set.size, 0);
   const peakUsers = participantSets.reduce((m, set) => Math.max(m, set.size), 0);
 
   const durationsMin = rooms
-    .map((r) => (Number(r.duration) > 0 ? Number(r.duration) : null))
+    .map(r => (Number(r.duration) > 0 ? Number(r.duration) : null))
     .filter(Boolean);
   const avgRoomDurationMinutes = durationsMin.length
     ? durationsMin.reduce((a, b) => a + b, 0) / durationsMin.length
     : 0;
 
-  const [messageCount] = await Promise.all([
-    MeetingMessage.countDocuments({ roomType: "discussion" }),
-  ]);
-
-  let speakingTimeMinutesProxy = Math.round((avgRoomDurationMinutes * peakUsers) / Math.max(totalRooms, 1));
-
+  // --- Engagement ---
   let engagementRate = 0;
   if (totalRooms > 0) {
     const withChat = await MeetingMessage.distinct("roomId", { roomType: "discussion" });
     engagementRate = Math.min(1, withChat.length / totalRooms);
   }
 
-  const recordingsCount = await SavedDiscussionRecording.countDocuments({});
-
-  const avgMessagesPerRoom =
-    totalRooms > 0 ? Math.round(messageCount / totalRooms) : 0;
+  const avgMessagesPerRoom = totalRooms > 0 ? Math.round(messageCount / totalRooms) : 0;
+  const speakingTimeMinutesProxy = Math.round(
+    (avgRoomDurationMinutes * peakUsers) / Math.max(totalRooms, 1)
+  );
 
   return {
+    // Rooms
     totalRooms,
-    totalParticipantsUniqueNote:
-      "Sum of participant array lengths per room document (Mongo-stored roster; may overlap across rooms).",
+    liveNow,
+    liveRooms: liveNow,
+    ended,
+    endedRooms: ended,
+    scheduled,
+    scheduledRooms: scheduled,
+    byStatus,
+
+    // Reports
+    totalReports,
+    pendingReports,
+    resolvedReports,
+
+    // Participants
     totalParticipants,
-    avgRoomDurationMinutes: Math.round(avgRoomDurationMinutes * 100) / 100,
-    avgSessionDurationNote:
-      "Uses scheduled discussion duration field (minutes), not tracked LiveKit session length.",
     peakUsers,
-    peakUsersNote: "Maximum participants roster size on any single DiscussionRoom row.",
+    avgRoomDurationMinutes: Math.round(avgRoomDurationMinutes * 100) / 100,
     messageCount,
     avgMessagesPerRoom,
     recordingsCount,
     speakingTimeMinutesProxy,
-    speakingTimeNote:
-      "(avgScheduledDuration * peakUsers) / totalRooms — rough proxy until per-participant speech telemetry exists.",
     engagementRate: Math.round(engagementRate * 10000) / 10000,
-    engagementRateNote: "Rooms with ≥1 persisted chat message (MeetingMessage.discussion) / totalRooms.",
   };
 }
 

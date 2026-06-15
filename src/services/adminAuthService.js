@@ -62,6 +62,7 @@ async function authenticateWithPassword(emailRaw, password, ip, ua) {
             id: String(admin.roleId._id),
             name: admin.roleId.name,
             slug: admin.roleId.slug,
+            permissionKeys: admin.roleId.permissionKeys || [],
           }
         : null,
     },

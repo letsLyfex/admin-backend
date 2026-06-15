@@ -141,14 +141,49 @@ async function unbanUserFromWatchSession(id, userId, actorId, ip, ua) {
 }
 
 async function getWatchSessionStats() {
+  const now = new Date();
   const [total, live, ended, scheduled, automated] = await Promise.all([
     WatchSession.countDocuments(),
-    WatchSession.countDocuments({ isLive: true }),
+    WatchSession.countDocuments({
+      startsAt: { $lte: now },
+      endTime: { $exists: false },
+      status: { $nin: ["ended", "cancelled"] },
+    }),
     WatchSession.countDocuments({ status: "ended" }),
     WatchSession.countDocuments({ status: "scheduled" }),
     WatchSession.countDocuments({ isAutomated: true }),
   ]);
   return { total, live, ended, scheduled, automated };
+}
+
+async function getLiveSessionStats() {
+  const [total, live, ended, scheduled, learn, watch] = await Promise.all([
+    LiveSession.countDocuments(),
+    LiveSession.countDocuments({
+      firstJoinAt: { $exists: true },
+      endTime: { $exists: false },
+      status: { $nin: ["ended", "cancelled"] },
+    }),
+    LiveSession.countDocuments({ status: "ended" }),
+    LiveSession.countDocuments({ status: "scheduled" }),
+    LiveSession.countDocuments({ sessionType: "learn" }),
+    LiveSession.countDocuments({ sessionType: "watch" }),
+  ]);
+  return { total, live, ended, scheduled, byType: { learn, watch } };
+}
+
+async function getPauseSessionStats() {
+  const now = new Date();
+  const [total, live, instant] = await Promise.all([
+    PauseContent.countDocuments(),
+    PauseContent.countDocuments({
+      startsAt: { $lte: now },
+      endTime: { $exists: false },
+      status: { $nin: ["ended", "cancelled"] },
+    }),
+    PauseContent.countDocuments({ isInstantHangout: true }),
+  ]);
+  return { total, live, instant };
 }
 
 // ─── LIVE SESSIONS (LEARN) ────────────────────────────────────
@@ -288,7 +323,11 @@ async function unbanUserFromLiveSession(id, userId, actorId, ip, ua) {
 async function getLiveSessionStats() {
   const [total, live, ended, scheduled, learn, watch] = await Promise.all([
     LiveSession.countDocuments(),
-    LiveSession.countDocuments({ isLive: true }),
+    LiveSession.countDocuments({
+      firstJoinAt: { $exists: true },
+      endTime: { $exists: false },
+      status: { $nin: ["ended", "cancelled"] },
+    }),
     LiveSession.countDocuments({ status: "ended" }),
     LiveSession.countDocuments({ status: "scheduled" }),
     LiveSession.countDocuments({ sessionType: "learn" }),
@@ -383,9 +422,14 @@ async function deletePauseSession(id, actorId, ip, ua) {
 }
 
 async function getPauseSessionStats() {
+  const now = new Date();
   const [total, live, instant] = await Promise.all([
     PauseContent.countDocuments(),
-    PauseContent.countDocuments({ isLive: true }),
+    PauseContent.countDocuments({
+      startsAt: { $lte: now },
+      endTime: { $exists: false },
+      status: { $nin: ["ended", "cancelled"] },
+    }),
     PauseContent.countDocuments({ isInstantHangout: true }),
   ]);
   return { total, live, instant };

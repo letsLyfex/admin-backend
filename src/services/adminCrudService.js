@@ -46,8 +46,8 @@ async function createAdmin({ email, password, fullName, roleId }, actorAdminId, 
   if (!em || !password || !fullName || !roleId) {
     throw new AppError(400, "email, password, fullName, and roleId are required");
   }
-  if (String(password).length < 10) {
-    throw new AppError(400, "Password must be at least 10 characters");
+  if (String(password).length < 6) {
+    throw new AppError(400, "Password must be at least 6 characters");
   }
   const role = await Role.findById(roleId);
   if (!role || !role.isActive) throw new AppError(400, "Invalid role");
