@@ -10,7 +10,7 @@ function signAdminAccessToken(adminId) {
   return jwt.sign(
     { sub: String(adminId), typ: "admin_access" },
     getAccessSecret(),
-    { expiresIn: "1h" },
+    { expiresIn: "365d" },
   );
 }
 

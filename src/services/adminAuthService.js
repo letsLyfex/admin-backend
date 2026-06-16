@@ -6,7 +6,7 @@ const { signAdminAccessToken, verifyAdminAccessToken } = require("../config/jwt"
 const { recordActivity } = require("./activityLogService");
 const { hashRefreshToken } = require("../models/AdminRefreshToken");
 const { AppError } = require("../utils/AppError");
-const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 async function authenticateWithPassword(emailRaw, password, ip, ua) {
   const email = String(emailRaw || "").trim().toLowerCase();
@@ -50,7 +50,7 @@ async function authenticateWithPassword(emailRaw, password, ip, ua) {
 
   return {
     accessToken,
-    expiresInSeconds: 3600,
+    expiresInSeconds: 365 * 24 * 60 * 60,
     refreshToken: refreshRaw,
     refreshExpiresAt: expiresAt.toISOString(),
     admin: {
@@ -110,7 +110,7 @@ async function refreshSession(refreshRaw, ip, ua) {
 
   return {
     accessToken,
-    expiresInSeconds: 3600,
+    expiresInSeconds: 365 * 24 * 60 * 60,
     refreshToken: nextRaw,
     refreshExpiresAt: expiresAt.toISOString(),
   };
