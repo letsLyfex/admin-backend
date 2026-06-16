@@ -1,5 +1,7 @@
 const Payment = require("../models/Payment");
 const User = require("../models/User");
+const WatchSession = require("../models/WatchSession");
+const LiveSession = require("../models/LiveSession");
 const mongoose = require("mongoose");
 const { AppError } = require("../utils/AppError");
 const { getPagination, paginationMeta } = require("../utils/pagination");
@@ -7,71 +9,121 @@ const { recordActivity } = require("./activityLogService");
 
 async function listPayments(query) {
   const { page, limit, skip } = getPagination(query);
-  const filter = {
-    hasPaidSubscription: true,
-    $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
-  };
+  const typeFilter = query.type; // "subscription" | "session_access" | undefined (all)
 
-  if (query.status === "paid") {
-    filter.hasPaidSubscription = true;
+  // Early exit for statuses that can't exist
+  if (query.status === "failed" || query.status === "refunded" || query.status === "created") {
+    return { items: [], meta: paginationMeta(0, page, limit) };
   }
 
-  if (query.status === "created") {
-    filter.hasPaidSubscription = false;
-  }
+  let subscriptionItems = [];
+  let sessionItems = [];
 
-  if (query.status === "failed") {
-    return {
-      items: [],
-      meta: paginationMeta(0, page, limit),
+  if (!typeFilter || typeFilter === "subscription") {
+    const userFilter = {
+      hasPaidSubscription: true,
+      $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
     };
+    if (query.q) {
+      const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      userFilter.$or = [
+        { fullName: new RegExp(esc, "i") },
+        { email: new RegExp(esc, "i") },
+      ];
+    }
+    const users = await User.find(userFilter)
+      .sort({ updatedAt: -1 })
+      .select("fullName email subscriptionPlan subscriptionExpiresAt hasPaidSubscription usedPaymentIds createdAt updatedAt")
+      .lean();
+
+    subscriptionItems = users.map((u) => ({
+      _id: String(u._id),
+      type: "subscription",
+      userId: { _id: u._id, fullName: u.fullName, email: u.email },
+      plan: u.subscriptionPlan,
+      status: "paid",
+      amount: u.subscriptionPlan === "TALK" ? 299 : u.subscriptionPlan === "CONTRIBUTE" ? 599 : 0,
+      currency: "INR",
+      razorpayPaymentId: u.usedPaymentIds?.length > 0
+        ? u.usedPaymentIds[u.usedPaymentIds.length - 1]
+        : null,
+      paymentId: u.usedPaymentIds?.length > 0
+        ? u.usedPaymentIds[u.usedPaymentIds.length - 1]
+        : null,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
   }
 
-  if (query.status === "refunded") {
-    return {
-      items: [],
-      meta: paginationMeta(0, page, limit),
+  if (!typeFilter || typeFilter === "session_access") {
+    const sessionFilter = { "paidParticipantIds.0": { $exists: true } };
+
+    const [watchSessions, liveSessions] = await Promise.all([
+      WatchSession.find(sessionFilter)
+        .populate("paidParticipantIds", "fullName email")
+        .populate("vipParticipantIds", "_id")
+        .select("title roomId paymentAmount hasTiers vipPaymentAmount normalPaymentAmount paidParticipantIds vipParticipantIds createdAt updatedAt")
+        .lean(),
+      LiveSession.find(sessionFilter)
+        .populate("paidParticipantIds", "fullName email")
+        .populate("vipParticipantIds", "_id")
+        .select("title roomId paymentAmount hasTiers vipPaymentAmount normalPaymentAmount paidParticipantIds vipParticipantIds createdAt updatedAt")
+        .lean(),
+    ]);
+
+    const buildSessionItems = (sessions, sessionType) => {
+      const items = [];
+      for (const session of sessions) {
+        const vipIds = new Set(
+          (session.vipParticipantIds || []).map((v) => String(v._id || v))
+        );
+        for (const user of (session.paidParticipantIds || [])) {
+          if (!user || typeof user !== "object") continue;
+          if (query.q) {
+            const q = query.q.toLowerCase();
+            if (
+              !user.fullName?.toLowerCase().includes(q) &&
+              !user.email?.toLowerCase().includes(q) &&
+              !session.title?.toLowerCase().includes(q)
+            ) continue;
+          }
+          const isVip = session.hasTiers && vipIds.has(String(user._id));
+          const amount = session.hasTiers
+            ? (isVip ? session.vipPaymentAmount : session.normalPaymentAmount)
+            : session.paymentAmount;
+
+          items.push({
+            _id: `${session._id}_${user._id}`,
+            type: "session_access",
+            userId: { _id: user._id, fullName: user.fullName, email: user.email },
+            plan: session.title,
+            status: "paid",
+            amount: amount || 0,
+            currency: "INR",
+            sessionId: session._id,
+            sessionType,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+          });
+        }
+      }
+      return items;
     };
-  }
 
-  if (query.q) {
-    const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    filter.$or = [
-      { fullName: new RegExp(esc, "i") },
-      { email: new RegExp(esc, "i") },
+    sessionItems = [
+      ...buildSessionItems(watchSessions, "watch"),
+      ...buildSessionItems(liveSessions, "live"),
     ];
   }
 
-  const [items, total] = await Promise.all([
-    User.find(filter)
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select("fullName email subscriptionPlan subscriptionExpiresAt hasPaidSubscription usedPaymentIds createdAt updatedAt")
-      .lean(),
-    User.countDocuments(filter),
-  ]);
+  const all = [...subscriptionItems, ...sessionItems].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
 
-const mapped = items.map((u) => ({
-  _id: u._id,
-  userId: { _id: u._id, fullName: u.fullName, email: u.email },
-  plan: u.subscriptionPlan,
-  status: u.hasPaidSubscription ? "paid" : "created",
-  amount: u.subscriptionPlan === "TALK" ? 299 : u.subscriptionPlan === "CONTRIBUTE" ? 599 : 0,
-  currency: "INR",
-  // Use the last payment ID from usedPaymentIds array
-  razorpayPaymentId: u.usedPaymentIds?.length > 0 
-    ? u.usedPaymentIds[u.usedPaymentIds.length - 1] 
-    : null,
-  paymentId: u.usedPaymentIds?.length > 0 
-    ? u.usedPaymentIds[u.usedPaymentIds.length - 1] 
-    : null,
-  subscriptionExpiresAt: u.subscriptionExpiresAt,
-  createdAt: u.createdAt,
-  updatedAt: u.updatedAt,
-}));
+  const total = all.length;
+  const items = all.slice(skip, skip + limit);
 
-  return { items: mapped, meta: paginationMeta(total, page, limit) };
+  return { items, meta: paginationMeta(total, page, limit) };
 }
 
 async function getPaymentById(id) {
@@ -136,19 +188,58 @@ async function updatePaymentStatus(id, { status, note }, actorId, ip, ua) {
 }
 
 async function getPaymentStats() {
-  const [total, paid, talk, contribute] = await Promise.all([
-    User.countDocuments({ hasPaidSubscription: true }),
-    User.countDocuments({ hasPaidSubscription: true }),
+  const [talk, contribute, watchAgg, liveAgg] = await Promise.all([
     User.countDocuments({ subscriptionPlan: "TALK", hasPaidSubscription: true }),
     User.countDocuments({ subscriptionPlan: "CONTRIBUTE", hasPaidSubscription: true }),
+    WatchSession.aggregate([
+      { $match: { "paidParticipantIds.0": { $exists: true } } },
+      {
+        $project: {
+          paidCount: { $size: "$paidParticipantIds" },
+          revenue: {
+            $multiply: [{ $size: "$paidParticipantIds" }, "$paymentAmount"],
+          },
+        },
+      },
+      { $group: { _id: null, count: { $sum: "$paidCount" }, revenue: { $sum: "$revenue" } } },
+    ]),
+    LiveSession.aggregate([
+      { $match: { "paidParticipantIds.0": { $exists: true } } },
+      {
+        $project: {
+          paidCount: { $size: "$paidParticipantIds" },
+          revenue: {
+            $multiply: [{ $size: "$paidParticipantIds" }, "$paymentAmount"],
+          },
+        },
+      },
+      { $group: { _id: null, count: { $sum: "$paidCount" }, revenue: { $sum: "$revenue" } } },
+    ]),
   ]);
 
+  const subscriptionCount = talk + contribute;
+  const subscriptionRevenue = talk * 299 + contribute * 599;
+  const watchCount = watchAgg[0]?.count || 0;
+  const watchRevenue = watchAgg[0]?.revenue || 0;
+  const liveCount = liveAgg[0]?.count || 0;
+  const liveRevenue = liveAgg[0]?.revenue || 0;
+  const sessionCount = watchCount + liveCount;
+  const sessionRevenue = watchRevenue + liveRevenue;
+
   return {
-    count: { total, paid, failed: 0, refunded: 0, created: 0 },
-    revenue: { INR: (talk * 299) + (contribute * 599) },
+    count: {
+      total: subscriptionCount + sessionCount,
+      paid: subscriptionCount + sessionCount,
+      failed: 0,
+      refunded: 0,
+      created: 0,
+    },
+    revenue: { INR: subscriptionRevenue + sessionRevenue },
     byPlan: [
       { plan: "TALK", count: talk, total: talk * 299 },
       { plan: "CONTRIBUTE", count: contribute, total: contribute * 599 },
+      { plan: "Watch Session Access", count: watchCount, total: watchRevenue },
+      { plan: "Live Session Access", count: liveCount, total: liveRevenue },
     ],
   };
 }

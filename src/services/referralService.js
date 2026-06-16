@@ -78,32 +78,30 @@ async function updateWithdrawalStatus(id, { status, note }, actorId, ip, ua) {
 }
 
 async function getWithdrawalStats() {
-  const [total, pending, completed, failed, rejected] = await Promise.all([
+  const [total, pending, completed, failed, rejected, pending_purchase] = await Promise.all([
     ReferralWithdrawal.countDocuments(),
     ReferralWithdrawal.countDocuments({ status: "pending" }),
     ReferralWithdrawal.countDocuments({ status: "completed" }),
     ReferralWithdrawal.countDocuments({ status: "failed" }),
     ReferralWithdrawal.countDocuments({ status: "rejected" }),
+    ReferralWithdrawal.countDocuments({ status: "pending_purchase" }),
   ]);
 
-  // total amount by status
   const amountAgg = await ReferralWithdrawal.aggregate([
-    {
-      $group: {
-        _id: "$status",
-        totalAmount: { $sum: "$amount" },
-      },
-    },
+    { $group: { _id: "$status", totalAmount: { $sum: "$amount" } } },
   ]);
 
-  const amounts = {};
-  amountAgg.forEach((a) => {
-    amounts[a._id] = a.totalAmount;
-  });
+  const rawAmounts = {};
+  amountAgg.forEach((a) => { rawAmounts[a._id] = a.totalAmount; });
 
   return {
-    count: { total, pending, completed, failed, rejected },
-    amounts,
+    count: { total, pending, completed, failed, rejected, pending_purchase },
+    amounts: {
+      completed: rawAmounts.completed || 0,
+      pending: rawAmounts.pending || 0,
+      pending_purchase: rawAmounts.pending_purchase || 0,
+      rejected: rawAmounts.rejected || 0,
+    },
   };
 }
 

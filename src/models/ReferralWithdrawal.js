@@ -14,13 +14,13 @@ const referralWithdrawalSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "completed", "failed", "rejected"],
+      enum: ["pending", "completed", "failed", "rejected", "pending_purchase"],
       default: "pending",
       index: true,
     },
     reason: {
       type: String,
-      enum: ["session_access", "withdrawal", "bonus", "refund"],
+      enum: ["session_access", "withdrawal", "bonus", "refund", "subscription"],
       default: "withdrawal",
       index: true,
     },
