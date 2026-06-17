@@ -61,9 +61,9 @@ const sendPromotion = asyncHandler(async (req, res) => {
   const unsubscribedEmails = new Set(unsubscribedDocs.map(d => d.email.toLowerCase()));
 
   // Filter out any unsubscribed emails
-  // const allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
-  let allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
-  allRecipients = ["navinrochani07@gmail.com"];
+  const allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
+  // let allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
+  // allRecipients = ["navinrochani07@gmail.com"];
 
   if (allRecipients.length === 0) {
     return res.status(400).json({ success: false, message: "No valid recipients found." });
