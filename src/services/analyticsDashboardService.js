@@ -52,8 +52,8 @@ async function getDashboardSummary() {
     // Total 
     User.countDocuments({}),
 
-    // Active 
-    User.countDocuments({ deletedAt: null }),  
+    // Active
+    User.countDocuments({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }),
 
     // Deleted 
     User.countDocuments({ deletedAt: { $ne: null, $exists: true } }),
