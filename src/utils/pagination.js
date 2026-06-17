@@ -4,7 +4,7 @@ function getPagination(query) {
   const page =
     Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
   const limit =
-    Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, Math.floor(limitRaw)) : 20;
+    Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(1000, Math.floor(limitRaw)) : 20;
   const skip = (page - 1) * limit;
   return { page, limit, skip };
 }

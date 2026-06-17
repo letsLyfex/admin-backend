@@ -12,6 +12,7 @@ const mongoose = require("mongoose");
 
 const { errorHandler } = require("./src/middleware/errorHandler");
 const { bootstrapAll } = require("./src/services/bootstrapService");
+const { initCronJobs } = require("./src/services/cronService");
 
 const adminRoutes = require("./src/routes/admin.routes");
 const rolesRoutes = require("./src/routes/roles.routes");
@@ -22,6 +23,7 @@ const sessionRoutes = require("./src/routes/session.routes");
 const referralRoutes = require("./src/routes/referral.routes");
 const paymentRoutes = require("./src/routes/payment.routes");
 const notificationRoutes = require("./src/routes/notifications.routes");
+const promotionRoutes = require("./src/routes/promotion.routes");
 
 const PORT = Number(process.env.ADMIN_PORT) || 4100;
 const MONGODB_URI = String(process.env.MONGODB_URI || "").trim();
@@ -46,6 +48,9 @@ app.get("/", (_req, res) => {
   res.json({ ok: true, service: "admin-backend" });
 });
 
+// Serve static assets (like email logos)
+app.use("/assets", express.static(path.join(__dirname, "assets")));
+
 app.use("/admin", adminRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/users", usersRoutes);
@@ -55,6 +60,7 @@ app.use("/sessions", sessionRoutes);
 app.use("/referrals", referralRoutes);
 app.use("/payments", paymentRoutes);
 app.use("/notifications", notificationRoutes);
+app.use("/promotions", promotionRoutes);
 
 app.use(errorHandler);
 
@@ -75,6 +81,7 @@ mongoose
   .then(async () => {
     console.log("[admin] MongoDB connected");
     await bootstrapAll();
+    initCronJobs();
     app.listen(PORT, () => {
       console.log(`[admin] listening on http://localhost:${PORT}`);
     });

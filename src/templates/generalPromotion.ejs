@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #060D1A; color: #ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #060D1A; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table width="100%" max-width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; background-color: #0B1423; border: 1px solid #1E3150; border-radius: 12px; overflow: hidden; margin: 0 auto;">
+          
+          <!-- Header (Logo) -->
+          <tr>
+            <td align="center" style="padding: 30px 20px; background-color: #060D1A; border-bottom: 1px solid #1E3150;">
+              <img src="<%= backendUrl %>/assets/logo.png" alt="LYFex Logo" style="height: 32px; display: block; border: 0;" />
+            </td>
+          </tr>
+
+          <!-- Cover Image -->
+          <% if (typeof coverImage !== 'undefined' && coverImage) { %>
+          <tr>
+            <td align="center" style="background-color: #111;">
+              <img src="<%= coverImage %>" alt="Cover Image" style="width: 100%; max-width: 600px; height: auto; display: block; border: 0;" />
+            </td>
+          </tr>
+          <% } %>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <% if (typeof title !== 'undefined' && title) { %>
+              <h2 style="margin: 0 0 25px 0; font-size: 24px; font-weight: bold; color: #ffffff; line-height: 1.3;">
+                <%= title %>
+              </h2>
+              <% } %>
+
+              <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap;"><%= description %></p>
+
+              <!-- CTA Button -->
+              <% if (typeof buttonText !== 'undefined' && typeof buttonLink !== 'undefined' && buttonText && buttonLink) { %>
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td align="center">
+                    <a href="<%= buttonLink %>" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #ef4444 0%, #f97316 50%, #eab308 100%); background-color: #f97316; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 8px; text-align: center;">
+                      <%= buttonText %>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <% } %>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding: 30px; background-color: #060D1A; border-top: 1px solid #1E3150;">
+              <p style="margin: 0; font-size: 12px; color: #64748b;">
+                You are receiving this email because you are registered on TheLyfex.
+              </p>
+              <p style="margin: 10px 0 0 0; font-size: 12px; color: #64748b;">
+                <a href="<%= unsubscribeUrl %>" style="color: #3b82f6; text-decoration: none;">Unsubscribe from promotions</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -64,6 +64,9 @@ const DEFAULT_PERMISSIONS = [
   { key: "admin_accounts.assign", description: "Assign roles to admins",group: "admins"       },
   { key: "admin_accounts.delete", description: "Delete admin accounts",group: "admins"        },
   { key: "admin_accounts.block",  description: "Suspend admin accounts",group: "admins"       },
+
+  // Promotions
+  { key: "promotions.view",       description: "Send promotional emails",group: "promotions"  },
 ];
 
 const ALL_KEYS = DEFAULT_PERMISSIONS.map((p) => p.key);
@@ -104,6 +107,7 @@ function roleMatrix() {
        "analytics.view",  "analytics.details",
       "sessions.view",    "sessions.details",
       "activity_logs.view",
+      "promotions.view",
     ],
   };
 }

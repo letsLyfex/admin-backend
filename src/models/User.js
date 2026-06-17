@@ -15,6 +15,10 @@ const userSchema = new mongoose.Schema(
 
   isOnline: Boolean,
   lastActiveAt: Date,
+  unsubscribedPromotions: {
+    type: Boolean,
+    default: false,
+  },
 
   // Admin fields
   isBlocked: {
