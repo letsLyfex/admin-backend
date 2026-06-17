@@ -17,7 +17,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
     }
     
     // Add default backend URL for the unsubscribe link and logo inside EJS
-    const backendUrl = process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    const backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
     templateData.backendUrl = backendUrl;
     templateData.unsubscribeUrl = `${backendUrl}/promotions/unsubscribe?email={{params.USER_EMAIL}}`;
     
@@ -28,7 +28,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required template data." });
     }
 
-    const backendUrl = process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    const backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
     templateData.backendUrl = backendUrl;
     templateData.unsubscribeUrl = `${backendUrl}/promotions/unsubscribe?email={{params.USER_EMAIL}}`;
     

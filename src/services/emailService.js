@@ -20,7 +20,7 @@ async function sendPromotionalEmail(recipients, subject, htmlContent) {
   for (let i = 0; i < recipients.length; i += chunkSize) {
     const chunk = recipients.slice(i, i + chunkSize);
     
-    const backendUrl = process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    const backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
     
     let finalHtml = htmlContent;
     if (!finalHtml.includes("{{params.USER_EMAIL}}")) {
