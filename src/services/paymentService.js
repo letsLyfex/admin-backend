@@ -9,119 +9,63 @@ const { recordActivity } = require("./activityLogService");
 
 async function listPayments(query) {
   const { page, limit, skip } = getPagination(query);
-  const typeFilter = query.type; // "subscription" | "session_access" | undefined (all)
 
-  // Early exit for statuses that can't exist
-  if (query.status === "failed" || query.status === "refunded" || query.status === "created") {
-    return { items: [], meta: paginationMeta(0, page, limit) };
-  }
-
-  let subscriptionItems = [];
-  let sessionItems = [];
-
-  if (!typeFilter || typeFilter === "subscription") {
-    const userFilter = {
-      hasPaidSubscription: true,
-      $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
-    };
-    if (query.q) {
-      const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      userFilter.$or = [
-        { fullName: new RegExp(esc, "i") },
-        { email: new RegExp(esc, "i") },
-      ];
-    }
-    const users = await User.find(userFilter)
-      .sort({ updatedAt: -1 })
-      .select("fullName email subscriptionPlan subscriptionExpiresAt hasPaidSubscription usedPaymentIds createdAt updatedAt")
-      .lean();
-
-    subscriptionItems = users.map((u) => ({
-      _id: String(u._id),
-      type: "subscription",
-      userId: { _id: u._id, fullName: u.fullName, email: u.email },
-      plan: u.subscriptionPlan,
-      status: "paid",
-      amount: u.subscriptionPlan === "TALK" ? 299 : u.subscriptionPlan === "CONTRIBUTE" ? 599 : 0,
-      currency: "INR",
-      razorpayPaymentId: u.usedPaymentIds?.length > 0
-        ? u.usedPaymentIds[u.usedPaymentIds.length - 1]
-        : null,
-      paymentId: u.usedPaymentIds?.length > 0
-        ? u.usedPaymentIds[u.usedPaymentIds.length - 1]
-        : null,
-      createdAt: u.createdAt,
-      updatedAt: u.updatedAt,
-    }));
-  }
-
-  if (!typeFilter || typeFilter === "session_access") {
-    const sessionFilter = { "paidParticipantIds.0": { $exists: true } };
-
-    const [watchSessions, liveSessions] = await Promise.all([
-      WatchSession.find(sessionFilter)
-        .populate("paidParticipantIds", "fullName email")
-        .populate("vipParticipantIds", "_id")
-        .select("title roomId paymentAmount hasTiers vipPaymentAmount normalPaymentAmount paidParticipantIds vipParticipantIds createdAt updatedAt")
-        .lean(),
-      LiveSession.find(sessionFilter)
-        .populate("paidParticipantIds", "fullName email")
-        .populate("vipParticipantIds", "_id")
-        .select("title roomId paymentAmount hasTiers vipPaymentAmount normalPaymentAmount paidParticipantIds vipParticipantIds createdAt updatedAt")
-        .lean(),
-    ]);
-
-    const buildSessionItems = (sessions, sessionType) => {
-      const items = [];
-      for (const session of sessions) {
-        const vipIds = new Set(
-          (session.vipParticipantIds || []).map((v) => String(v._id || v))
-        );
-        for (const user of (session.paidParticipantIds || [])) {
-          if (!user || typeof user !== "object") continue;
-          if (query.q) {
-            const q = query.q.toLowerCase();
-            if (
-              !user.fullName?.toLowerCase().includes(q) &&
-              !user.email?.toLowerCase().includes(q) &&
-              !session.title?.toLowerCase().includes(q)
-            ) continue;
-          }
-          const isVip = session.hasTiers && vipIds.has(String(user._id));
-          const amount = session.hasTiers
-            ? (isVip ? session.vipPaymentAmount : session.normalPaymentAmount)
-            : session.paymentAmount;
-
-          items.push({
-            _id: `${session._id}_${user._id}`,
-            type: "session_access",
-            userId: { _id: user._id, fullName: user.fullName, email: user.email },
-            plan: session.title,
-            status: "paid",
-            amount: amount || 0,
-            currency: "INR",
-            sessionId: session._id,
-            sessionType,
-            createdAt: session.createdAt,
-            updatedAt: session.updatedAt,
-          });
-        }
-      }
-      return items;
-    };
-
-    sessionItems = [
-      ...buildSessionItems(watchSessions, "watch"),
-      ...buildSessionItems(liveSessions, "live"),
+  const filter = {};
+  if (query.type) filter.type = query.type;
+  if (query.status) filter.status = query.status;
+  if (query.q) {
+    // search by razorpay payment/order ID
+    const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { razorpayPaymentId: new RegExp(esc, "i") },
+      { razorpayOrderId: new RegExp(esc, "i") },
     ];
   }
 
-  const all = [...subscriptionItems, ...sessionItems].sort(
-    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  const [rawItems, total] = await Promise.all([
+    Payment.find(filter)
+      .populate("userId", "fullName email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Payment.countDocuments(filter),
+  ]);
 
-  const total = all.length;
-  const items = all.slice(skip, skip + limit);
+  // Enrich session_access items with session title
+  const sessionIds = rawItems
+    .filter((p) => p.type === "session_access" && p.sessionId)
+    .map((p) => p.sessionId);
+
+  let sessionTitles = {};
+  if (sessionIds.length > 0) {
+    const [watchSessions, liveSessions] = await Promise.all([
+      WatchSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
+      LiveSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
+    ]);
+    [...watchSessions, ...liveSessions].forEach((s) => {
+      sessionTitles[String(s._id)] = s.title;
+    });
+  }
+
+  const items = rawItems.map((p) => ({
+    _id: String(p._id),
+    type: p.type,
+    userId: p.userId,
+    plan: p.type === "session_access"
+      ? (sessionTitles[String(p.sessionId)] ?? p.plan ?? "Session Access")
+      : (p.plan ?? "Subscription"),
+    status: p.status,
+    amount: p.amount,
+    currency: p.currency,
+    razorpayPaymentId: p.razorpayPaymentId || null,
+    razorpayOrderId: p.razorpayOrderId || null,
+    sessionId: p.sessionId,
+    sessionType: p.sessionType,
+    tier: p.tier,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  }));
 
   return { items, meta: paginationMeta(total, page, limit) };
 }
@@ -188,59 +132,44 @@ async function updatePaymentStatus(id, { status, note }, actorId, ip, ua) {
 }
 
 async function getPaymentStats() {
-  const [talk, contribute, watchAgg, liveAgg] = await Promise.all([
-    User.countDocuments({ subscriptionPlan: "TALK", hasPaidSubscription: true }),
-    User.countDocuments({ subscriptionPlan: "CONTRIBUTE", hasPaidSubscription: true }),
-    WatchSession.aggregate([
-      { $match: { "paidParticipantIds.0": { $exists: true } } },
-      {
-        $project: {
-          paidCount: { $size: "$paidParticipantIds" },
-          revenue: {
-            $multiply: [{ $size: "$paidParticipantIds" }, "$paymentAmount"],
-          },
-        },
-      },
-      { $group: { _id: null, count: { $sum: "$paidCount" }, revenue: { $sum: "$revenue" } } },
+  const [statusAgg, revenueAgg, planAgg] = await Promise.all([
+    Payment.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
-    LiveSession.aggregate([
-      { $match: { "paidParticipantIds.0": { $exists: true } } },
-      {
-        $project: {
-          paidCount: { $size: "$paidParticipantIds" },
-          revenue: {
-            $multiply: [{ $size: "$paidParticipantIds" }, "$paymentAmount"],
-          },
-        },
-      },
-      { $group: { _id: null, count: { $sum: "$paidCount" }, revenue: { $sum: "$revenue" } } },
+    Payment.aggregate([
+      { $match: { status: "paid" } },
+      { $group: { _id: "$currency", total: { $sum: "$amount" } } },
+    ]),
+    Payment.aggregate([
+      { $match: { status: "paid" } },
+      { $group: { _id: { type: "$type", plan: "$plan", sessionType: "$sessionType" }, count: { $sum: 1 }, total: { $sum: "$amount" } } },
     ]),
   ]);
 
-  const subscriptionCount = talk + contribute;
-  const subscriptionRevenue = talk * 299 + contribute * 599;
-  const watchCount = watchAgg[0]?.count || 0;
-  const watchRevenue = watchAgg[0]?.revenue || 0;
-  const liveCount = liveAgg[0]?.count || 0;
-  const liveRevenue = liveAgg[0]?.revenue || 0;
-  const sessionCount = watchCount + liveCount;
-  const sessionRevenue = watchRevenue + liveRevenue;
+  const statusMap = {};
+  statusAgg.forEach((s) => { statusMap[s._id] = s.count; });
+
+  const revenue = {};
+  revenueAgg.forEach((r) => { revenue[r._id || "INR"] = r.total; });
+
+  const byPlan = planAgg.map((p) => ({
+    plan: p._id.plan || p._id.sessionType || p._id.type || "Unknown",
+    count: p.count,
+    total: p.total,
+  }));
+
+  const total = Object.values(statusMap).reduce((s, v) => s + v, 0);
 
   return {
     count: {
-      total: subscriptionCount + sessionCount,
-      paid: subscriptionCount + sessionCount,
-      failed: 0,
-      refunded: 0,
-      created: 0,
+      total,
+      paid: statusMap.paid || 0,
+      failed: statusMap.failed || 0,
+      refunded: statusMap.refunded || 0,
+      created: statusMap.created || 0,
     },
-    revenue: { INR: subscriptionRevenue + sessionRevenue },
-    byPlan: [
-      { plan: "TALK", count: talk, total: talk * 299 },
-      { plan: "CONTRIBUTE", count: contribute, total: contribute * 599 },
-      { plan: "Watch Session Access", count: watchCount, total: watchRevenue },
-      { plan: "Live Session Access", count: liveCount, total: liveRevenue },
-    ],
+    revenue: Object.keys(revenue).length > 0 ? revenue : { INR: 0 },
+    byPlan,
   };
 }
 
