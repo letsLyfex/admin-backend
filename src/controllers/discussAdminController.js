@@ -42,3 +42,7 @@ exports.patchReport = async (req, res) => {
   const { status, adminNote } = req.body || {};
   res.json(await svc.updateReportStatus(req.params.reportId, { status, adminNote }, ...ctx(req)));
 };
+
+exports.getStats = async (req, res) => {
+  res.json(await svc.getStats());
+};

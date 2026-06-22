@@ -22,11 +22,7 @@ async function getWatchSessionAnalytics() {
   ] = await Promise.all([
     WatchSession.countDocuments(),
 
-WatchSession.countDocuments({
-  startsAt: { $lte: now },
-  endTime: { $exists: false },   
-  status: { $nin: ["ended", "cancelled"] },
-}),
+WatchSession.countDocuments({ isLive: true }),
 
     WatchSession.countDocuments({ status: "ended" }),
     WatchSession.countDocuments({ status: "scheduled" }),
@@ -148,11 +144,7 @@ async function getLiveSessionAnalytics() {
   ] = await Promise.all([
     LiveSession.countDocuments(),
 
-LiveSession.countDocuments({
-  firstJoinAt: { $exists: true },
-  endTime: { $exists: false },
-  status: { $nin: ["ended", "cancelled"] },
-}),
+LiveSession.countDocuments({ isLive: true }),
 
     LiveSession.countDocuments({ status: "ended" }),
     LiveSession.countDocuments({ status: "scheduled" }),
@@ -269,9 +261,7 @@ async function getPauseSessionAnalytics() {
   ] = await Promise.all([
     PauseContent.countDocuments(),
 
-    PauseContent.countDocuments({
-      $or: [{ isLive: true }, { status: "live" }],
-    }),
+    PauseContent.countDocuments({ isLive: true }),
 
     PauseContent.countDocuments({ isInstantHangout: true }),
 

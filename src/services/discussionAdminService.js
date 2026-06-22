@@ -167,6 +167,16 @@ async function updateReportStatus(reportId, { status, adminNote }, actorId, ip, 
   return r.toObject();
 }
 
+async function getStats() {
+  const [total, liveNow, ended, scheduled] = await Promise.all([
+    DiscussionRoom.countDocuments(),
+    DiscussionRoom.countDocuments({ isLive: true }),
+    DiscussionRoom.countDocuments({ status: "ended" }),
+    DiscussionRoom.countDocuments({ status: "scheduled" }),
+  ]);
+  return { total, liveNow, ended, scheduled };
+}
+
 module.exports = {
   listRooms,
   getRoomByAnyId,
@@ -175,4 +185,5 @@ module.exports = {
   setFeatured,
   listReports,
   updateReportStatus,
+  getStats,
 };
