@@ -24,6 +24,7 @@ const referralRoutes = require("./src/routes/referral.routes");
 const paymentRoutes = require("./src/routes/payment.routes");
 const notificationRoutes = require("./src/routes/notifications.routes");
 const promotionRoutes = require("./src/routes/promotion.routes");
+const uploadRoutes = require("./src/routes/upload.routes");
 
 const PORT = Number(process.env.ADMIN_PORT) || 4100;
 const MONGODB_URI = String(process.env.MONGODB_URI || "").trim();
@@ -61,6 +62,7 @@ app.use("/referrals", referralRoutes);
 app.use("/payments", paymentRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/promotions", promotionRoutes);
+app.use("/upload", uploadRoutes);
 
 app.use(errorHandler);
 

@@ -7,7 +7,7 @@ const ejs = require("ejs");
 const path = require("path");
 
 const sendPromotion = asyncHandler(async (req, res) => {
-  const { subject, htmlContent, externalEmails, templateType, templateData, dripDelivery, emailsPerHour, scheduleTime } = req.body;
+  const { subject, htmlContent, externalEmails, templateType, templateData, dripDelivery, emailsPerHour, scheduleTime, sendToExternalOnly } = req.body;
 
   let finalHtml = htmlContent;
 
@@ -17,7 +17,8 @@ const sendPromotion = asyncHandler(async (req, res) => {
     }
     
     // Add default backend URL for the unsubscribe link and logo inside EJS
-    const backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    let backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    if (backendUrl.endsWith('/')) backendUrl = backendUrl.slice(0, -1);
     templateData.backendUrl = backendUrl;
     templateData.unsubscribeUrl = `${backendUrl}/promotions/unsubscribe?email={{params.USER_EMAIL}}`;
     
@@ -28,7 +29,8 @@ const sendPromotion = asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required template data." });
     }
 
-    const backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    let backendUrl = process.env.APP_PUBLIC_URL || process.env.ADMIN_BACKEND_URL || "http://localhost:4100";
+    if (backendUrl.endsWith('/')) backendUrl = backendUrl.slice(0, -1);
     templateData.backendUrl = backendUrl;
     templateData.unsubscribeUrl = `${backendUrl}/promotions/unsubscribe?email={{params.USER_EMAIL}}`;
     
@@ -41,14 +43,18 @@ const sendPromotion = asyncHandler(async (req, res) => {
   }
 
   // 1. Fetch all registered users who have not been deleted and have not unsubscribed
-  const users = await User.find({ deletedAt: null, unsubscribedPromotions: { $ne: true } }).select("email").lean();
+  let userEmails = [];
+  const isExternalOnly = sendToExternalOnly === true || sendToExternalOnly === "true";
   
-  const userEmails = users.map(u => u.email).filter(Boolean);
+  if (!isExternalOnly) {
+    const users = await User.find({ deletedAt: null, unsubscribedPromotions: { $ne: true } }).select("email").lean();
+    userEmails = users.map(u => u.email).filter(Boolean);
+  }
 
   // 2. Process external emails
   let externalList = [];
   if (externalEmails && typeof externalEmails === "string") {
-    externalList = externalEmails.split(",").map(e => e.trim()).filter(Boolean);
+    externalList = externalEmails.split(/[\s,]+/).map(e => e.trim()).filter(Boolean);
   } else if (Array.isArray(externalEmails)) {
     externalList = externalEmails.map(e => String(e).trim()).filter(Boolean);
   }
@@ -63,7 +69,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
   // Filter out any unsubscribed emails
   const allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
   // let allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
-  // allRecipients = ["navinrochani07@gmail.com"];
+  // allRecipients = ["aayushudhani17@gmail.com"];
 
   if (allRecipients.length === 0) {
     return res.status(400).json({ success: false, message: "No valid recipients found." });
