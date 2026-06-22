@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.use(attachAdmin);
 
+router.get("/stats", requirePermission("sessions.view"), asyncHandler(d.getStats));
 router.get("/rooms", requirePermission("sessions.view"), asyncHandler(d.listRooms));
 
 router.get("/reports", requirePermission("sessions.moderate"), asyncHandler(d.listReports));
