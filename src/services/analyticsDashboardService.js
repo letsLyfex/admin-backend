@@ -87,8 +87,8 @@ async function getDashboardSummary() {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
 
-    // Payments — from Payment collection
-    Payment.countDocuments({}),
+    // Payments — only successful (paid) transactions
+    Payment.countDocuments({ status: "paid" }),
     User.aggregate([
       { $match: { hasPaidSubscription: true } },
       { $group: { _id: "$subscriptionPlan", count: { $sum: 1 } } },
