@@ -12,13 +12,6 @@
         <!-- Main Container -->
         <table width="100%" max-width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; background-color: #0B1423; border: 1px solid #1E3150; border-radius: 12px; overflow: hidden; margin: 0 auto;">
           
-          <!-- Header (Logo) -->
-          <tr>
-            <td align="center" style="padding: 30px 20px; background-color: #060D1A; border-bottom: 1px solid #1E3150;">
-              <img src="<%= backendUrl %>/assets/logo.png" alt="LYFex Logo" style="height: 32px; display: block; border: 0;" />
-            </td>
-          </tr>
-
           <!-- Cover Image -->
           <% if (typeof coverImage !== 'undefined' && coverImage) { %>
           <tr>
@@ -56,7 +49,7 @@
 
           <!-- Footer -->
           <tr>
-            <td align="center" style="padding: 30px; background-color: #060D1A; border-top: 1px solid #1E3150;">
+            <td align="center" style="padding: 5px; background-color: #060D1A; border-top: 1px solid #1E3150;">
               <p style="margin: 10px 0 0 0; font-size: 12px; color: #64748b;">
                 <a href="<%= unsubscribeUrl %>" style="color:#94a3b8; text-decoration:none;">Unsubscribe from promotions</a>
               </p>
