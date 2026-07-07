@@ -44,7 +44,7 @@ const paymentSchema = new mongoose.Schema(
     },
     sessionType: {
       type: String,
-      enum: ["watch", "live", "discuss", null],
+      enum: ["watch", "live", "pause", "discussion", "sell", "compete", null],
       default: null,
     },
 

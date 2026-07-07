@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Payment = require("../models/Payment");
 const WatchSession = require("../models/WatchSession");
 const LiveSession = require("../models/LiveSession");
 const PauseContent = require("../models/PauseContent");
@@ -40,9 +41,8 @@ async function getDashboardSummary() {
     referralCompleted,
     referralPendingAgg,
 
-    // Payments — from User model (Payment collection is empty)
+    // Payments — from Payment collection
     totalPayments,
-    paidPayments,
     planAgg,
 
     // Activity
@@ -87,12 +87,8 @@ async function getDashboardSummary() {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
 
-    // Payments
-    User.countDocuments({ hasPaidSubscription: true }),
-    User.countDocuments({
-      hasPaidSubscription: true,
-      subscriptionExpiresAt: { $gt: new Date() },
-    }),
+    // Payments — only successful (paid) transactions
+    Payment.countDocuments({ status: "paid" }),
     User.aggregate([
       { $match: { hasPaidSubscription: true } },
       { $group: { _id: "$subscriptionPlan", count: { $sum: 1 } } },
@@ -143,7 +139,6 @@ async function getDashboardSummary() {
     },
     payments: {
       total: totalPayments,
-      paid: paidPayments,
       revenue,
     },
     recentActivity,

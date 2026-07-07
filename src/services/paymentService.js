@@ -2,6 +2,8 @@ const Payment = require("../models/Payment");
 const User = require("../models/User");
 const WatchSession = require("../models/WatchSession");
 const LiveSession = require("../models/LiveSession");
+const PauseContent = require("../models/PauseContent");
+const DiscussionRoom = require("../models/DiscussionRoom");
 const mongoose = require("mongoose");
 const { AppError } = require("../utils/AppError");
 const { getPagination, paginationMeta } = require("../utils/pagination");
@@ -39,12 +41,17 @@ async function listPayments(query) {
 
   let sessionTitles = {};
   if (sessionIds.length > 0) {
-    const [watchSessions, liveSessions] = await Promise.all([
+    const [watchSessions, liveSessions, pauseContents, discussionRooms] = await Promise.all([
       WatchSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
       LiveSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
+      PauseContent.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
+      DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic").lean(),
     ]);
-    [...watchSessions, ...liveSessions].forEach((s) => {
+    [...watchSessions, ...liveSessions, ...pauseContents].forEach((s) => {
       sessionTitles[String(s._id)] = s.title;
+    });
+    discussionRooms.forEach((s) => {
+      sessionTitles[String(s._id)] = s.topic;
     });
   }
 
@@ -132,7 +139,7 @@ async function updatePaymentStatus(id, { status, note }, actorId, ip, ua) {
 }
 
 async function getPaymentStats() {
-  const [statusAgg, revenueAgg, planAgg] = await Promise.all([
+  const [statusAgg, revenueAgg, watchSessions, liveSessions] = await Promise.all([
     Payment.aggregate([
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
@@ -140,10 +147,14 @@ async function getPaymentStats() {
       { $match: { status: "paid" } },
       { $group: { _id: "$currency", total: { $sum: "$amount" } } },
     ]),
-    Payment.aggregate([
-      { $match: { status: "paid" } },
-      { $group: { _id: { type: "$type", plan: "$plan", sessionType: "$sessionType" }, count: { $sum: 1 }, total: { $sum: "$amount" } } },
-    ]),
+    WatchSession.find(
+      { paidParticipantIds: { $exists: true, $not: { $size: 0 } } },
+      { title: 1, paidParticipantIds: 1, vipParticipantIds: 1, paymentAmount: 1, hasTiers: 1, vipPaymentAmount: 1, normalPaymentAmount: 1 }
+    ).lean(),
+    LiveSession.find(
+      { paidParticipantIds: { $exists: true, $not: { $size: 0 } } },
+      { title: 1, paidParticipantIds: 1, vipParticipantIds: 1, paymentAmount: 1, hasTiers: 1, vipPaymentAmount: 1, normalPaymentAmount: 1 }
+    ).lean(),
   ]);
 
   const statusMap = {};
@@ -152,11 +163,21 @@ async function getPaymentStats() {
   const revenue = {};
   revenueAgg.forEach((r) => { revenue[r._id || "INR"] = r.total; });
 
-  const byPlan = planAgg.map((p) => ({
-    plan: p._id.plan || p._id.sessionType || p._id.type || "Unknown",
-    count: p.count,
-    total: p.total,
-  }));
+  const byPlan = [...watchSessions, ...liveSessions]
+    .map((session) => {
+      const txCount = (session.paidParticipantIds || []).length;
+      let sessionRevenue;
+      if (session.hasTiers) {
+        const vipCount = (session.vipParticipantIds || []).length;
+        const normalCount = txCount - vipCount;
+        sessionRevenue = vipCount * (session.vipPaymentAmount || 0) + normalCount * (session.normalPaymentAmount || 0);
+      } else {
+        sessionRevenue = txCount * (session.paymentAmount || 0);
+      }
+      return { plan: session.title || "Unknown", count: txCount, total: sessionRevenue };
+    })
+    .filter((p) => p.count > 0)
+    .sort((a, b) => b.total - a.total);
 
   const total = Object.values(statusMap).reduce((s, v) => s + v, 0);
 
