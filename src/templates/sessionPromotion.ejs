@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= sessionTitle %></title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #060D1A; color: #ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #060D1A; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff; color: #1a1a1a;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; padding: 40px 20px;">
     <tr>
       <td align="center">
         <!-- Main Container -->
-        <table width="100%" max-width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; background-color: #0B1423; border: 1px solid #1E3150; border-radius: 12px; overflow: hidden; margin: 0 auto;">
+        <table width="100%" max-width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin: 0 auto;">
           
           <!-- Cover Image -->
           <% if (typeof coverImage !== 'undefined' && coverImage) { %>
           <tr>
-            <td align="center" style="background-color: #111;">
+            <td align="center" style="background-color: #ffffff;">
               <img src="<%= coverImage %>" alt="Session Cover" style="width: 100%; max-width: 600px; height: auto; display: block; border: 0;" />
             </td>
           </tr>
@@ -24,21 +24,21 @@
           <!-- Content -->
           <tr>
             <td style="padding: 40px 30px;">
-              <h2 style="margin: 0 0 15px 0; font-size: 24px; font-weight: bold; color: #ffffff; line-height: 1.3;">
+              <h2 style="margin: 0 0 15px 0; font-size: 24px; font-weight: bold; color: #1a1a1a; line-height: 1.3;">
                 <%= sessionTitle %>
               </h2>
               
-              <div style="margin-bottom: 25px; padding-bottom: 25px; border-bottom: 1px solid #1E3150;">
-                <p style="margin: 0 0 8px 0; font-size: 15px; color: #94a3b8;">
-                  <strong>Hosted by:</strong> <span style="color: #e2e8f0;"><%= hostName %></span>
+              <div style="margin-bottom: 25px; padding-bottom: 25px; border-bottom: 1px solid #e2e8f0;">
+                <p style="margin: 0 0 8px 0; font-size: 15px; color: #475569;">
+                  <strong>Hosted by:</strong> <span style="color: #1a1a1a;"><%= hostName %></span>
                 </p>
-                <p style="margin: 0; font-size: 15px; color: #94a3b8;">
-                  <strong>Date and Time:</strong> <span style="color: #e2e8f0;"><%= sessionDate %></span>
+                <p style="margin: 0; font-size: 15px; color: #475569;">
+                  <strong>Date and Time:</strong> <span style="color: #1a1a1a;"><%= sessionDate %></span>
                 </p>
                 <% if (typeof sessionPrice !== 'undefined' && sessionPrice) { 
                      const priceColor = sessionPrice.toLowerCase() === 'free' ? '#10b981' : '#f59e0b';
                 %>
-                <p style="margin: 8px 0 0 0; font-size: 15px; color: #94a3b8;">
+                <p style="margin: 8px 0 0 0; font-size: 15px; color: #475569;">
                   <strong>Price:</strong> 
                   <span style="<%- 'color: ' + priceColor + '; font-weight: bold;' %>">
                     <%= sessionPrice %>
@@ -47,7 +47,7 @@
                 <% } %>
               </div>
 
-              <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap;"><%= description %></p>
+              <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #333333; white-space: pre-wrap;"><%= description %></p>
 
               <!-- CTA Button -->
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
@@ -64,9 +64,9 @@
 
           <!-- Footer -->
           <tr>
-            <td align="center" style="padding: 5px; background-color: #060D1A; border-top: 1px solid #1E3150;">
-              <p style="margin: 10px 0 0 0; font-size: 12px; color: #64748b;">
-                <a href="<%= unsubscribeUrl %>" style="color:#94a3b8; text-decoration:none;">Unsubscribe</a>
+            <td align="center" style="padding: 15px 5px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; font-size: 12px; color: #64748b;">
+                <a href="<%= unsubscribeUrl %>" style="color: #64748b; text-decoration: underline;">Unsubscribe</a>
               </p>
             </td>
           </tr>
