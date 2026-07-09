@@ -1,4 +1,5 @@
 const svc = require("../services/paymentService");
+
 const { getClientIp } = require("../utils/requestHelpers");
 
 function ctx(req) {
@@ -30,4 +31,8 @@ exports.updateStatus = async (req, res) => {
 
 exports.getStats = async (req, res) => {
   res.json(await svc.getPaymentStats());
+};
+
+exports.getSessions = async (req, res) => {
+  res.json(await svc.listPaymentSessions());
 };

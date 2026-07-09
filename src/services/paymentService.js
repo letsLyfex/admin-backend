@@ -16,6 +16,9 @@ async function listPayments(query) {
   if (query.type) filter.type = query.type;
   if (query.status) filter.status = query.status;
   if (query.sessionType) filter.sessionType = query.sessionType;
+  if (query.sessionId && mongoose.isValidObjectId(query.sessionId)) {
+    filter.sessionId = new mongoose.Types.ObjectId(query.sessionId);
+  }
 
   if (query.q) {
     const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -213,10 +216,38 @@ async function getPaymentStats() {
   };
 }
 
+// Returns all sessions that have at least one payment, for the filter dropdown
+async function listPaymentSessions() {
+  const sessionIds = await Payment.distinct("sessionId", {
+    type: "session_access",
+    sessionId: { $ne: null },
+  });
+
+  if (!sessionIds.length) return [];
+
+  const [watchSessions, liveSessions, pauseContents, discussionRooms] = await Promise.all([
+    WatchSession.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
+    LiveSession.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
+    PauseContent.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
+    DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic sessionType").lean(),
+  ]);
+
+  const sessions = [
+    ...watchSessions.map((s) => ({ _id: s._id, name: s.title, type: "watch" })),
+    ...liveSessions.map((s) => ({ _id: s._id, name: s.title, type: "live" })),
+    ...pauseContents.map((s) => ({ _id: s._id, name: s.title, type: "pause" })),
+    ...discussionRooms.map((s) => ({ _id: s._id, name: s.topic, type: "discussion" })),
+  ].filter((s) => s.name);
+
+  sessions.sort((a, b) => a.name.localeCompare(b.name));
+  return sessions;
+}
+
 module.exports = {
   listPayments,
   getPaymentById,
   getUserPayments,
   updatePaymentStatus,
   getPaymentStats,
+  listPaymentSessions,
 };

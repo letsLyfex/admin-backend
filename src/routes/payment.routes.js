@@ -20,6 +20,12 @@ router.get(
 );
 
 router.get(
+  "/sessions",
+  requirePermission("payments.view"),
+  asyncHandler(c.getSessions)
+);
+
+router.get(
   "/user/:userId",
   requirePermission("payments.view"),
   asyncHandler(c.getUserPayments)
