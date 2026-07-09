@@ -15,13 +15,32 @@ async function listPayments(query) {
   const filter = {};
   if (query.type) filter.type = query.type;
   if (query.status) filter.status = query.status;
+  if (query.sessionType) filter.sessionType = query.sessionType;
+
   if (query.q) {
-    // search by razorpay payment/order ID
     const esc = query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    filter.$or = [
-      { razorpayPaymentId: new RegExp(esc, "i") },
-      { razorpayOrderId: new RegExp(esc, "i") },
+    const regex = new RegExp(esc, "i");
+
+    // Resolve matching user IDs and session IDs so search works across all pages
+    const [matchUsers, matchWatch, matchLive, matchPause, matchDiscuss] = await Promise.all([
+      User.find({ $or: [{ fullName: regex }, { email: regex }] }).select("_id").lean(),
+      WatchSession.find({ title: regex }).select("_id").lean(),
+      LiveSession.find({ title: regex }).select("_id").lean(),
+      PauseContent.find({ title: regex }).select("_id").lean(),
+      DiscussionRoom.find({ topic: regex }).select("_id").lean(),
+    ]);
+
+    const userIds = matchUsers.map((u) => u._id);
+    const sessionIds = [...matchWatch, ...matchLive, ...matchPause, ...matchDiscuss].map((s) => s._id);
+
+    const orClauses = [
+      { razorpayPaymentId: regex },
+      { razorpayOrderId: regex },
     ];
+    if (userIds.length) orClauses.push({ userId: { $in: userIds } });
+    if (sessionIds.length) orClauses.push({ sessionId: { $in: sessionIds } });
+
+    filter.$or = orClauses;
   }
 
   const [rawItems, total] = await Promise.all([
