@@ -4,6 +4,9 @@ const WatchSession = require("../models/WatchSession");
 const LiveSession = require("../models/LiveSession");
 const PauseContent = require("../models/PauseContent");
 const DiscussionRoom = require("../models/DiscussionRoom");
+const SellSession = require("../models/SellSession");
+const CompeteSession = require("../models/CompeteSession");
+const HelpSession = require("../models/HelpSession");
 const mongoose = require("mongoose");
 const { AppError } = require("../utils/AppError");
 const { getPagination, paginationMeta } = require("../utils/pagination");
@@ -63,17 +66,23 @@ async function listPayments(query) {
 
   let sessionTitles = {};
   if (sessionIds.length > 0) {
-    const [watchSessions, liveSessions, pauseContents, discussionRooms] = await Promise.all([
+    const [watchSessions, liveSessions, pauseContents, discussionRooms, sellSessions, competeSessions, helpSessions] = await Promise.all([
       WatchSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
       LiveSession.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
       PauseContent.find({ _id: { $in: sessionIds } }).select("_id title").lean(),
       DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic").lean(),
+      SellSession.find({ _id: { $in: sessionIds } }).select("_id productName").lean(),
+      CompeteSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean(),
+      HelpSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean(),
     ]);
     [...watchSessions, ...liveSessions, ...pauseContents].forEach((s) => {
       sessionTitles[String(s._id)] = s.title;
     });
-    discussionRooms.forEach((s) => {
+    [...discussionRooms, ...competeSessions, ...helpSessions].forEach((s) => {
       sessionTitles[String(s._id)] = s.topic;
+    });
+    sellSessions.forEach((s) => {
+      sessionTitles[String(s._id)] = s.productName;
     });
   }
 
@@ -216,28 +225,56 @@ async function getPaymentStats() {
   };
 }
 
-// Returns all sessions that have at least one payment, for the filter dropdown
+// Returns all sessions that have paid participants or payment records, for the filter dropdown
 async function listPaymentSessions() {
+  const paidQuery = { paidParticipantIds: { $exists: true, $not: { $size: 0 } } };
+
+  // Approach 1: sessions linked via Payment.sessionId
   const sessionIds = await Payment.distinct("sessionId", {
     type: "session_access",
     sessionId: { $ne: null },
   });
 
-  if (!sessionIds.length) return [];
-
-  const [watchSessions, liveSessions, pauseContents, discussionRooms] = await Promise.all([
-    WatchSession.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
-    LiveSession.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
-    PauseContent.find({ _id: { $in: sessionIds } }).select("_id title sessionType").lean(),
-    DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic sessionType").lean(),
+  // Approach 2: sessions that have paidParticipantIds set (catches older payments
+  // where sessionId was not stored on the Payment record)
+  const [
+    watchById, liveById, pauseById, discussById, sellById, competeById, helpById,
+    watchByPaid, liveByPaid, pauseByPaid, discussByPaid,
+  ] = await Promise.all([
+    sessionIds.length ? WatchSession.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
+    sessionIds.length ? LiveSession.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
+    sessionIds.length ? PauseContent.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
+    sessionIds.length ? DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
+    sessionIds.length ? SellSession.find({ _id: { $in: sessionIds } }).select("_id productName").lean() : [],
+    sessionIds.length ? CompeteSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
+    sessionIds.length ? HelpSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
+    WatchSession.find(paidQuery).select("_id title").lean(),
+    LiveSession.find(paidQuery).select("_id title").lean(),
+    PauseContent.find(paidQuery).select("_id title").lean(),
+    DiscussionRoom.find(paidQuery).select("_id topic").lean(),
   ]);
 
-  const sessions = [
-    ...watchSessions.map((s) => ({ _id: s._id, name: s.title, type: "watch" })),
-    ...liveSessions.map((s) => ({ _id: s._id, name: s.title, type: "live" })),
-    ...pauseContents.map((s) => ({ _id: s._id, name: s.title, type: "pause" })),
-    ...discussionRooms.map((s) => ({ _id: s._id, name: s.topic, type: "discussion" })),
-  ].filter((s) => s.name);
+  // Merge both sets, deduplicating by _id
+  const seen = new Set();
+  const sessions = [];
+
+  const add = (arr, nameKey, type) => {
+    for (const s of arr) {
+      const id = String(s._id);
+      if (!seen.has(id) && s[nameKey]) {
+        seen.add(id);
+        sessions.push({ _id: s._id, name: s[nameKey], type });
+      }
+    }
+  };
+
+  add([...watchById, ...watchByPaid], "title", "watch");
+  add([...liveById, ...liveByPaid], "title", "live");
+  add([...pauseById, ...pauseByPaid], "title", "pause");
+  add([...discussById, ...discussByPaid], "topic", "discussion");
+  add(sellById, "productName", "sell");
+  add(competeById, "topic", "compete");
+  add(helpById, "topic", "help");
 
   sessions.sort((a, b) => a.name.localeCompare(b.name));
   return sessions;
