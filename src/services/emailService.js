@@ -1,8 +1,9 @@
 const fetch = global.fetch; // using native fetch in Node 18+
+const User = require("../models/User");
 
-async function sendPromotionalEmail(recipients, subject, htmlContent) {
+async function sendPromotionalEmail(recipients, subject, htmlContent, senderName) {
   const apiKey = process.env.BRAVO_API_KEY;
-  const fromName = process.env.BRAVO_FROM_NAME || "TheLyfex";
+  const fromName = senderName || process.env.BRAVO_FROM_NAME || "TheLyfex";
   const fromEmail = process.env.BRAVO_FROM_EMAIL || "admin@thelyfex.com";
 
   if (!apiKey) {
@@ -11,6 +12,38 @@ async function sendPromotionalEmail(recipients, subject, htmlContent) {
 
   if (!recipients || recipients.length === 0) {
     return { successCount: 0, failureCount: 0 };
+  }
+
+  // Map recipients to nameMap, resolving names from DB only for those that need it
+  const nameMap = new Map();
+  const emailsNeedLookup = [];
+  
+  for (const r of recipients) {
+    if (!r) continue;
+    const email = typeof r === "string" ? r.trim() : (r.email || "").trim();
+    const name = typeof r === "string" ? "" : (r.name || "").trim();
+    
+    if (email) {
+      const emailLower = email.toLowerCase();
+      if (name) {
+        nameMap.set(emailLower, name);
+      } else {
+        emailsNeedLookup.push(email);
+      }
+    }
+  }
+
+  if (emailsNeedLookup.length > 0) {
+    try {
+      const users = await User.find({ email: { $in: emailsNeedLookup } }).select("email fullName").lean();
+      for (const u of users) {
+        if (u.email && u.fullName) {
+          nameMap.set(u.email.toLowerCase(), u.fullName.trim());
+        }
+      }
+    } catch (err) {
+      console.error("[emailService] Failed to fetch user names from DB:", err);
+    }
   }
 
   const chunkSize = 50;
@@ -35,10 +68,17 @@ async function sendPromotionalEmail(recipients, subject, htmlContent) {
         "List-Unsubscribe": `<${backendUrl}/promotions/unsubscribe?email={{params.USER_EMAIL}}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
       },
-      messageVersions: chunk.map((email) => ({
-        to: [{ email }],
-        params: { USER_EMAIL: email }
-      }))
+      messageVersions: chunk.map((r) => {
+        const email = typeof r === "string" ? r.trim() : (r.email || "").trim();
+        const name = nameMap.get(email.toLowerCase()) || "Customer";
+        return {
+          to: [{ email }],
+          params: { 
+            USER_EMAIL: email,
+            USER_NAME: name 
+          }
+        };
+      })
     };
 
     try {

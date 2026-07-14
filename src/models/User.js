@@ -60,6 +60,11 @@ const userSchema = new mongoose.Schema(
     type: Date,
     default: null,
   },
+
+  isManual: {
+    type: Boolean,
+    default: false,
+  },
 },
 { timestamps: true, collection: "users" }
 );

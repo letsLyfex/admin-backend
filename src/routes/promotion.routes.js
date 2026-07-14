@@ -1,5 +1,5 @@
 const express = require("express");
-const { sendPromotion, unsubscribe, resubscribe, getUnsubscribedUsers } = require("../controllers/promotionController");
+const { sendPromotion, unsubscribe, resubscribe, getUnsubscribedUsers, getPromotionPreview } = require("../controllers/promotionController");
 const { attachAdmin } = require("../middleware/attachAdmin");
 const { requirePermission } = require("../middleware/requirePermission");
 
@@ -17,6 +17,12 @@ router.get(
   "/unsubscribed",
   requirePermission("promotions.view"),
   getUnsubscribedUsers
+);
+
+router.get(
+  "/preview",
+  requirePermission("promotions.view"),
+  getPromotionPreview
 );
 
 router.post(

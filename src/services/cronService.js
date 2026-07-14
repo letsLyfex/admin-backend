@@ -21,7 +21,7 @@ function initCronJobs() {
 
         if (batch.length > 0) {
           // Send the emails
-          await sendPromotionalEmail(batch, campaign.subject, campaign.htmlContent);
+          await sendPromotionalEmail(batch, campaign.subject, campaign.htmlContent, campaign.senderName);
           console.log(`[Cron] Sent ${batch.length} drip emails for campaign: ${campaign.subject}`);
         }
 

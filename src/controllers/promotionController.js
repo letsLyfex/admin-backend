@@ -7,7 +7,7 @@ const ejs = require("ejs");
 const path = require("path");
 
 const sendPromotion = asyncHandler(async (req, res) => {
-  const { subject, htmlContent, externalEmails, templateType, templateData, dripDelivery, emailsPerHour, scheduleTime, sendToExternalOnly } = req.body;
+  const { subject, htmlContent, externalEmails, templateType, templateData, dripDelivery, emailsPerHour, scheduleTime, sendToExternalOnly, targetGroup, excludedEmails, senderName } = req.body;
 
   let finalHtml = htmlContent;
 
@@ -43,33 +43,79 @@ const sendPromotion = asyncHandler(async (req, res) => {
   }
 
   // 1. Fetch all registered users who have not been deleted and have not unsubscribed
-  let userEmails = [];
+  let registeredUsers = [];
   const isExternalOnly = sendToExternalOnly === true || sendToExternalOnly === "true";
   
   if (!isExternalOnly) {
-    const users = await User.find({ deletedAt: null, unsubscribedPromotions: { $ne: true } }).select("email").lean();
-    userEmails = users.map(u => u.email).filter(Boolean);
+    const query = { deletedAt: null, unsubscribedPromotions: { $ne: true } };
+    if (targetGroup === "recurring") {
+      query.isManual = { $ne: true };
+    } else if (targetGroup === "non-recurring") {
+      query.isManual = true;
+    }
+    const users = await User.find(query).select("email fullName").lean();
+    registeredUsers = users.map(u => ({
+      email: (u.email || "").trim(),
+      name: (u.fullName || "").trim()
+    })).filter(u => u.email);
   }
 
   // 2. Process external emails
   let externalList = [];
   if (externalEmails && typeof externalEmails === "string") {
-    externalList = externalEmails.split(/[\s,]+/).map(e => e.trim()).filter(Boolean);
+    const parts = externalEmails.split(/,/);
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      
+      const match = trimmed.match(/^([^<]+)<([^>]+)>$/);
+      if (match) {
+        externalList.push({
+          name: match[1].trim(),
+          email: match[2].trim()
+        });
+      } else {
+        externalList.push({
+          name: "",
+          email: trimmed
+        });
+      }
+    }
   } else if (Array.isArray(externalEmails)) {
-    externalList = externalEmails.map(e => String(e).trim()).filter(Boolean);
+    externalList = externalEmails.map(e => {
+      if (typeof e === "object" && e !== null) {
+        return {
+          email: String(e.email || "").trim(),
+          name: String(e.name || "").trim()
+        };
+      }
+      return {
+        email: String(e).trim(),
+        name: ""
+      };
+    }).filter(e => e.email);
   }
 
-  // 3. Combine and deduplicate
-  const allRecipientsSet = new Set([...userEmails, ...externalList]);
+  // 3. Combine and deduplicate by email
+  const recipientsMap = new Map();
+  if (!isExternalOnly) {
+    for (const r of registeredUsers) {
+      recipientsMap.set(r.email.toLowerCase(), r);
+    }
+  }
+  for (const r of externalList) {
+    recipientsMap.set(r.email.toLowerCase(), r);
+  }
 
   // Fetch globally unsubscribed emails to filter out external list opt-outs
   const unsubscribedDocs = await UnsubscribedEmail.find().select("email").lean();
   const unsubscribedEmails = new Set(unsubscribedDocs.map(d => d.email.toLowerCase()));
 
-  // Filter out any unsubscribed emails
-  const allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
-  // let allRecipients = Array.from(allRecipientsSet).filter(e => !unsubscribedEmails.has(e.toLowerCase()));
-  // allRecipients = ["aayushudhani17@gmail.com"];
+  // Filter out any unsubscribed emails and locally excluded emails
+  const excludedSet = new Set((excludedEmails || []).map(e => String(e).toLowerCase().trim()));
+  const allRecipients = Array.from(recipientsMap.values()).filter(
+    r => !unsubscribedEmails.has(r.email.toLowerCase()) && !excludedSet.has(r.email.toLowerCase())
+  );
 
   if (allRecipients.length === 0) {
     return res.status(400).json({ success: false, message: "No valid recipients found." });
@@ -87,7 +133,8 @@ const sendPromotion = asyncHandler(async (req, res) => {
       pendingRecipients: allRecipients,
       emailsPerHour: batchSize,
       status: "active",
-      nextRunAt: new Date(scheduleTime)
+      nextRunAt: new Date(scheduleTime),
+      senderName
     });
 
     return res.json({
@@ -105,7 +152,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
 
     // Send the first batch immediately
     if (initialBatch.length > 0) {
-      const result = await sendPromotionalEmail(initialBatch, subject, finalHtml);
+      const result = await sendPromotionalEmail(initialBatch, subject, finalHtml, senderName);
       successCount = result.successCount;
       failureCount = result.failureCount;
     }
@@ -118,7 +165,8 @@ const sendPromotion = asyncHandler(async (req, res) => {
         pendingRecipients: remaining,
         emailsPerHour: batchSize,
         status: "active",
-        nextRunAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+        senderName
       });
     }
 
@@ -135,7 +183,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
     });
   } else {
     // Normal immediate delivery
-    const { successCount, failureCount } = await sendPromotionalEmail(allRecipients, subject, finalHtml);
+    const { successCount, failureCount } = await sendPromotionalEmail(allRecipients, subject, finalHtml, senderName);
 
     res.json({
       success: true,
@@ -256,4 +304,28 @@ const getUnsubscribedUsers = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { sendPromotion, unsubscribe, resubscribe, getUnsubscribedUsers };
+const getPromotionPreview = asyncHandler(async (req, res) => {
+  const { targetGroup } = req.query;
+
+  const query = { deletedAt: null, unsubscribedPromotions: { $ne: true } };
+  if (targetGroup === "recurring") {
+    query.isManual = { $ne: true };
+  } else if (targetGroup === "non-recurring") {
+    query.isManual = true;
+  }
+
+  const users = await User.find(query).select("email fullName").lean();
+  
+  const unsubscribedDocs = await UnsubscribedEmail.find().select("email").lean();
+  const unsubscribedEmails = new Set(unsubscribedDocs.map(d => d.email.toLowerCase()));
+
+  const filteredUsers = users.filter(u => u.email && !unsubscribedEmails.has(u.email.toLowerCase()));
+
+  res.json({
+    success: true,
+    count: filteredUsers.length,
+    users: filteredUsers.map(u => ({ email: u.email, fullName: u.fullName || "" }))
+  });
+});
+
+module.exports = { sendPromotion, unsubscribe, resubscribe, getUnsubscribedUsers, getPromotionPreview };
