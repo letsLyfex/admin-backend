@@ -12,7 +12,7 @@ const sendPromotion = asyncHandler(async (req, res) => {
   let finalHtml = htmlContent;
 
   if (templateType === "session") {
-    if (!templateData || !templateData.sessionTitle || !templateData.sessionLink) {
+    if (!templateData || !templateData.sessionTitle) {
       return res.status(400).json({ success: false, message: "Missing required template data." });
     }
     
