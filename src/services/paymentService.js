@@ -277,7 +277,7 @@ async function listPaymentSessions() {
   add(helpById, "topic", "help");
 
   // Look up host names
-  const hostIds = [...new Set(sessions.map(s => String(s.hostId)).filter(Boolean))];
+  const hostIds = [...new Set(sessions.map(s => s.hostId).filter(Boolean).map(String))];
   const hostUsers = hostIds.length
     ? await User.find({ _id: { $in: hostIds } }).select("_id fullName").lean()
     : [];
@@ -285,7 +285,7 @@ async function listPaymentSessions() {
   hostUsers.forEach(u => { hostMap[String(u._id)] = u.fullName; });
 
   sessions.forEach(s => {
-    s.hostName = hostMap[String(s.hostId)] || null;
+    s.hostName = (s.hostId && hostMap[String(s.hostId)]) || null;
     delete s.hostId;
   });
 
