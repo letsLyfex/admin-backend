@@ -26,6 +26,7 @@ if (!apiKey) { console.error("Missing BRAVO_API_KEY"); process.exit(1); }
 
 const templateData = {
   title: "Welcome to Lyfex — Explore What's New!",
+  heading: "Welcome to Lyfex — Explore What's New!",
   description: `Hi there!\n\nWe're excited to have you on Lyfex. Explore live discussion sessions, connect with contributors, and grow your knowledge every day.\n\nJoin our upcoming sessions and be part of an amazing community!`,
   buttonText: "Explore Lyfex",
   buttonLink: "https://thelyfex.com",
