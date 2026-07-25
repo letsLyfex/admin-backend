@@ -241,17 +241,17 @@ async function listPaymentSessions() {
     watchById, liveById, pauseById, discussById, sellById, competeById, helpById,
     watchByPaid, liveByPaid, pauseByPaid, discussByPaid,
   ] = await Promise.all([
-    sessionIds.length ? WatchSession.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
-    sessionIds.length ? LiveSession.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
-    sessionIds.length ? PauseContent.find({ _id: { $in: sessionIds } }).select("_id title").lean() : [],
-    sessionIds.length ? DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
-    sessionIds.length ? SellSession.find({ _id: { $in: sessionIds } }).select("_id productName").lean() : [],
-    sessionIds.length ? CompeteSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
-    sessionIds.length ? HelpSession.find({ _id: { $in: sessionIds } }).select("_id topic").lean() : [],
-    WatchSession.find(paidQuery).select("_id title").lean(),
-    LiveSession.find(paidQuery).select("_id title").lean(),
-    PauseContent.find(paidQuery).select("_id title").lean(),
-    DiscussionRoom.find(paidQuery).select("_id topic").lean(),
+    sessionIds.length ? WatchSession.find({ _id: { $in: sessionIds } }).select("_id title hostId").lean() : [],
+    sessionIds.length ? LiveSession.find({ _id: { $in: sessionIds } }).select("_id title hostId").lean() : [],
+    sessionIds.length ? PauseContent.find({ _id: { $in: sessionIds } }).select("_id title hostId").lean() : [],
+    sessionIds.length ? DiscussionRoom.find({ _id: { $in: sessionIds } }).select("_id topic hostId").lean() : [],
+    sessionIds.length ? SellSession.find({ _id: { $in: sessionIds } }).select("_id productName hostId").lean() : [],
+    sessionIds.length ? CompeteSession.find({ _id: { $in: sessionIds } }).select("_id topic hostId").lean() : [],
+    sessionIds.length ? HelpSession.find({ _id: { $in: sessionIds } }).select("_id topic hostId").lean() : [],
+    WatchSession.find(paidQuery).select("_id title hostId").lean(),
+    LiveSession.find(paidQuery).select("_id title hostId").lean(),
+    PauseContent.find(paidQuery).select("_id title hostId").lean(),
+    DiscussionRoom.find(paidQuery).select("_id topic hostId").lean(),
   ]);
 
   // Merge both sets, deduplicating by _id
@@ -263,7 +263,7 @@ async function listPaymentSessions() {
       const id = String(s._id);
       if (!seen.has(id) && s[nameKey]) {
         seen.add(id);
-        sessions.push({ _id: s._id, name: s[nameKey], type });
+        sessions.push({ _id: s._id, name: s[nameKey], type, hostId: s.hostId });
       }
     }
   };
@@ -275,6 +275,19 @@ async function listPaymentSessions() {
   add(sellById, "productName", "sell");
   add(competeById, "topic", "compete");
   add(helpById, "topic", "help");
+
+  // Look up host names
+  const hostIds = [...new Set(sessions.map(s => s.hostId).filter(Boolean).map(String))];
+  const hostUsers = hostIds.length
+    ? await User.find({ _id: { $in: hostIds } }).select("_id fullName").lean()
+    : [];
+  const hostMap = {};
+  hostUsers.forEach(u => { hostMap[String(u._id)] = u.fullName; });
+
+  sessions.forEach(s => {
+    s.hostName = (s.hostId && hostMap[String(s.hostId)]) || null;
+    delete s.hostId;
+  });
 
   sessions.sort((a, b) => a.name.localeCompare(b.name));
   return sessions;
