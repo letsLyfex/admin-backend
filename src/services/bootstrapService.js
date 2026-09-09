@@ -67,6 +67,7 @@ const DEFAULT_PERMISSIONS = [
 
   // Promotions
   { key: "promotions.view",       description: "Send promotional emails",group: "promotions"  },
+  { key: "whatsapp.view",         description: "Send WhatsApp promotions",group: "promotions" },
 ];
 
 const ALL_KEYS = DEFAULT_PERMISSIONS.map((p) => p.key);
@@ -108,6 +109,7 @@ function roleMatrix() {
       "sessions.view",    "sessions.details",
       "activity_logs.view",
       "promotions.view",
+      "whatsapp.view",
     ],
   };
 }
