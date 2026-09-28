@@ -173,4 +173,4 @@ async function getUserAnalyticsSummary() {
   };
 }
 
-module.exports = { getUserAnalyticsSummary, approxOnlineUsers };
+module.exports = { getUserAnalyticsSummary, approxOnlineUsers, countReturningUsers };

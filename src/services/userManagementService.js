@@ -158,11 +158,11 @@ async function listUsers(query) {
 
   const [items, total] = await Promise.all([
     UserModel.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ pfp: 1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .select(
-        "fullName email country subscriptionPlan isBlocked isSuspended suspendedUntil contributorVerifiedAt contributorBadge contributorBadgeAssignedAt lastActive createdAt updatedAt phone deletedAt",
+        "fullName email country subscriptionPlan isBlocked isSuspended suspendedUntil contributorVerifiedAt contributorBadge contributorBadgeAssignedAt lastActive createdAt updatedAt phone deletedAt pfp",
       )
       .lean(),
     UserModel.countDocuments(filter),
