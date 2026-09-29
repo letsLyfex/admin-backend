@@ -176,11 +176,11 @@ async function getDashboardSummary() {
 
   // Baseline offset adjustments: current base is maintained, and all future items increment 1:1 normally
   const BASELINE_RAW_HOSTS = 120;
-  const BASE_HOSTS = 480;
+  const BASE_HOSTS = 521;
   const scaledHosts = BASE_HOSTS + Math.max(0, activeHosts - BASELINE_RAW_HOSTS);
 
   const BASELINE_RAW_PARTICIPANTS = 430;
-  const BASE_PARTICIPANTS = 7400;
+  const BASE_PARTICIPANTS = 6700;
   const scaledParticipants = BASE_PARTICIPANTS + Math.max(0, activeParticipants - BASELINE_RAW_PARTICIPANTS);
 
   const PLAN_PRICE = { TALK: 299, CONTRIBUTE: 599 };
@@ -197,7 +197,7 @@ async function getDashboardSummary() {
   const totalEarnings = Math.max(paymentEarnings, planEarnings);
 
   const BASELINE_RAW_REPEATED = 97;
-  const BASE_REPEATED = 194;
+  const BASE_REPEATED = 648;
   const rawRepeatedUsers = await countReturningUsers(last30);
   const repeatedUsers = BASE_REPEATED + Math.max(0, rawRepeatedUsers - BASELINE_RAW_REPEATED);
 
@@ -276,13 +276,13 @@ async function getDashboardSummary() {
     (pauseUsersAgg[0]?.total || 0);
 
   const BASELINE_RAW_JOINED_USERS = 1013;
-  const BASE_JOINED_USERS = 17430;
+  const BASE_JOINED_USERS = 15780;
   const scaledJoinedUsers = BASE_JOINED_USERS + Math.max(0, totalJoinedUsers - BASELINE_RAW_JOINED_USERS);
 
   const avgUsersPerLiveRoom =
     totalAllLiveRooms > 0
       ? Number((scaledJoinedUsers / totalAllLiveRooms).toFixed(1))
-      : 26.2;
+      : 23.8;
 
   // AWS Usage Cost ($53.74 USD total incl. tax from aws_usage.csv ≈ ₹4,514.16 INR at 84 INR/USD)
   const AWS_TOTAL_COST_USD = 53.74;
