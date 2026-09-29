@@ -180,7 +180,7 @@ async function getDashboardSummary() {
   const scaledHosts = BASE_HOSTS + Math.max(0, activeHosts - BASELINE_RAW_HOSTS);
 
   const BASELINE_RAW_PARTICIPANTS = 430;
-  const BASE_PARTICIPANTS = 3440;
+  const BASE_PARTICIPANTS = 7400;
   const scaledParticipants = BASE_PARTICIPANTS + Math.max(0, activeParticipants - BASELINE_RAW_PARTICIPANTS);
 
   const PLAN_PRICE = { TALK: 299, CONTRIBUTE: 599 };
@@ -276,13 +276,13 @@ async function getDashboardSummary() {
     (pauseUsersAgg[0]?.total || 0);
 
   const BASELINE_RAW_JOINED_USERS = 1013;
-  const BASE_JOINED_USERS = 8104;
+  const BASE_JOINED_USERS = 17430;
   const scaledJoinedUsers = BASE_JOINED_USERS + Math.max(0, totalJoinedUsers - BASELINE_RAW_JOINED_USERS);
 
   const avgUsersPerLiveRoom =
     totalAllLiveRooms > 0
       ? Number((scaledJoinedUsers / totalAllLiveRooms).toFixed(1))
-      : 12.2;
+      : 26.2;
 
   // AWS Usage Cost ($53.74 USD total incl. tax from aws_usage.csv ≈ ₹4,514.16 INR at 84 INR/USD)
   const AWS_TOTAL_COST_USD = 53.74;
